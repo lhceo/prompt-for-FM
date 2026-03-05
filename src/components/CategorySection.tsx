@@ -4,6 +4,7 @@ import ReferenceItem from './ReferenceItem';
 
 interface CategorySectionProps {
   category: Category;
+  isStyleGuideCategory?: boolean;
   onAddUrl: () => void;
   onAddImage: (file: File) => void;
   onUpdateRef: (refId: string, updates: Partial<Omit<Reference, 'id' | 'type'>>) => void;
@@ -12,6 +13,7 @@ interface CategorySectionProps {
 
 export default function CategorySection({
   category,
+  isStyleGuideCategory,
   onAddUrl,
   onAddImage,
   onUpdateRef,
@@ -52,6 +54,9 @@ export default function CategorySection({
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-900">{category.label}</span>
               <span className="text-xs text-gray-400">{category.labelEn}</span>
+              {isStyleGuideCategory && (
+                <span className="text-xs bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded font-medium">SG</span>
+              )}
               {hasRefs && (
                 <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
                   {category.references.length}件

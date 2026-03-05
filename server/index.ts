@@ -3,7 +3,7 @@ import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { analyzeCategoryReferences, generateFigmaPrompt, analyzeOverallStyle } from './claude.js';
+import { analyzeCategoryReferences, generateAllCategoryPrompts, analyzeOverallStyle, generateStyleGuide } from './claude.js';
 import type { AnalyzeRequest, ExtractionResult, GeneratePromptRequest } from '../src/types/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,11 +53,15 @@ app.post('/api/analyze', async (req, res) => {
       results.push(...batchResults);
     }
 
-    const overallStyle = await analyzeOverallStyle(filledCategories);
+    const [overallStyle, styleGuide] = await Promise.all([
+      analyzeOverallStyle(filledCategories),
+      generateStyleGuide(results),
+    ]);
 
     const extraction: ExtractionResult = {
       categories: results,
       overallStyle,
+      styleGuide: styleGuide ?? undefined,
       generatedAt: new Date().toISOString(),
     };
 
@@ -69,7 +73,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// Generate Figma Make prompt from extraction results
+// Generate per-category Figma Make prompts from extraction results
 app.post('/api/generate-prompt', async (req, res) => {
   try {
     const body: GeneratePromptRequest = req.body;
@@ -78,9 +82,9 @@ app.post('/api/generate-prompt', async (req, res) => {
       return res.status(400).json({ error: 'Invalid request body' });
     }
 
-    const prompt = await generateFigmaPrompt(body.extraction, body.additionalContext);
+    const prompts = await generateAllCategoryPrompts(body.extraction, body.additionalContext);
 
-    return res.json({ prompt });
+    return res.json({ prompts });
   } catch (error) {
     console.error('Prompt generation error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';

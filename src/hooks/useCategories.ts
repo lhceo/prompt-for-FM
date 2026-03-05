@@ -92,6 +92,24 @@ const INITIAL_CATEGORIES: Omit<Category, 'references'>[] = [
     labelEn: 'Symbol Motif',
     description: 'シンボル・グラフィックモチーフの参考',
   },
+  {
+    id: 'parallax',
+    label: 'パララックス',
+    labelEn: 'Parallax',
+    description: 'パララックス・スクロール連動アニメーションの参考（GSAP, ScrollMagic等）',
+  },
+  {
+    id: 'hover-animation',
+    label: 'ホバーアニメーション',
+    labelEn: 'Hover Animation',
+    description: 'ホバー時のアニメーション・インタラクションの参考',
+  },
+  {
+    id: 'transition',
+    label: 'トランジション',
+    labelEn: 'Transition',
+    description: 'ページ・要素間のトランジション効果の参考',
+  },
 ];
 
 function createDefaultCategory(base: Omit<Category, 'references'>): Category {

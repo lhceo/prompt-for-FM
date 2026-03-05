@@ -3,9 +3,12 @@ import { useCategories } from './hooks/useCategories';
 import CategorySection from './components/CategorySection';
 import ExtractedElements from './components/ExtractedElements';
 import PromptOutput from './components/PromptOutput';
-import type { ExtractionResult, AnalyzeRequest } from './types';
+import type { ExtractionResult, AnalyzeRequest, CategoryPrompt } from './types';
 
 type AppStep = 'references' | 'extraction' | 'prompt';
+
+// Categories used for style guide generation in Step 2
+const STYLE_GUIDE_CATEGORY_IDS = ['visual-impression', 'colors', 'fonts', 'layout'];
 
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -39,7 +42,7 @@ export default function App() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [generatedPrompt, setGeneratedPrompt] = useState('');
+  const [generatedPrompts, setGeneratedPrompts] = useState<CategoryPrompt[]>([]);
 
   const categoryLabels = Object.fromEntries(
     categories.map(c => [c.id, c.label])
@@ -123,7 +126,7 @@ export default function App() {
       }
 
       const data = await response.json();
-      setGeneratedPrompt(data.prompt);
+      setGeneratedPrompts(data.prompts);
       setStep('prompt');
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'プロンプト生成中にエラーが発生しました');
@@ -153,7 +156,7 @@ export default function App() {
             {/* Step indicator */}
             <div className="hidden sm:flex items-center gap-2">
               {(['references', 'extraction', 'prompt'] as AppStep[]).map((s, i) => {
-                const labels = ['参考登録', '要素抽出', 'プロンプト'];
+                const labels = ['参考登録', 'スタイルガイド', 'プロンプト'];
                 const isActive = step === s;
                 const isDone =
                   (s === 'references' && (step === 'extraction' || step === 'prompt')) ||
@@ -196,6 +199,10 @@ export default function App() {
                 各カテゴリに参考となるWebサイトのURLまたは画像を登録してください。
                 コメントで参考にすべき箇所を説明すると、より精度の高い分析ができます。
               </p>
+              <p className="text-xs text-gray-500 mt-1.5">
+                <span className="inline-flex items-center bg-violet-100 text-violet-600 text-xs px-1.5 py-0.5 rounded mr-1 font-medium">SG</span>
+                のマークの項目はStep 2のスタイルガイド生成に使用されます
+              </p>
             </div>
 
             {/* Progress summary */}
@@ -217,6 +224,7 @@ export default function App() {
                 <CategorySection
                   key={cat.id}
                   category={cat}
+                  isStyleGuideCategory={STYLE_GUIDE_CATEGORY_IDS.includes(cat.id)}
                   onAddUrl={() => addUrlReference(cat.id)}
                   onAddImage={file => addImageReference(cat.id, file)}
                   onUpdateRef={(refId, updates) => updateReference(cat.id, refId, updates)}
@@ -261,14 +269,14 @@ export default function App() {
           </div>
         )}
 
-        {/* Step 2: Extraction results */}
+        {/* Step 2: Extraction results + Style Guide */}
         {step === 'extraction' && extraction && (
           <div>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-gray-900 mb-1">Step 2：デザイン要素の抽出結果</h2>
+                <h2 className="text-lg font-bold text-gray-900 mb-1">Step 2：スタイルガイド・抽出結果</h2>
                 <p className="text-sm text-gray-600">
-                  AIが参考資料から抽出したデザイン要素です。内容を確認してプロンプト生成に進みましょう。
+                  AIが参考資料から生成したスタイルガイドと抽出要素です。内容を確認してプロンプト生成に進みましょう。
                 </p>
               </div>
               <button
@@ -285,6 +293,11 @@ export default function App() {
             <ExtractedElements result={extraction} categoryLabels={categoryLabels} />
 
             <div className="mt-8 flex flex-col items-center gap-3">
+              {generateError && (
+                <div className="w-full p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {generateError}
+                </div>
+              )}
               <button
                 onClick={() => setStep('prompt')}
                 className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-3.5 rounded-xl font-semibold text-sm hover:from-indigo-700 hover:to-purple-700 transition-all duration-150 shadow-md hover:shadow-lg"
@@ -305,7 +318,7 @@ export default function App() {
               <div>
                 <h2 className="text-lg font-bold text-gray-900 mb-1">Step 3：Figma Makeプロンプト生成</h2>
                 <p className="text-sm text-gray-600">
-                  抽出したデザイン要素をもとに、Figma Makeで使用するプロンプトを生成します。
+                  項目ごとにスコープを絞ったプロンプトを生成します。それぞれ独立してFigma Makeで使用できます。
                 </p>
               </div>
               <button
@@ -319,28 +332,22 @@ export default function App() {
               </button>
             </div>
 
-            {generateError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                {generateError}
-              </div>
-            )}
-
             <PromptOutput
-              prompt={generatedPrompt}
+              prompts={generatedPrompts}
               isGenerating={isGenerating}
               onGenerate={handleGeneratePrompt}
             />
 
-            {generatedPrompt && (
+            {generatedPrompts.length > 0 && (
               <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-xl">
                 <h4 className="text-sm font-semibold text-blue-800 mb-2">
                   Figma Makeへの貼り付け方
                 </h4>
                 <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
                   <li>Figma Makeを開く</li>
-                  <li>上のプロンプトをコピーする</li>
-                  <li>Figma Makeのプロンプト入力欄に貼り付ける</li>
-                  <li>必要に応じてプロンプトを調整して生成を実行する</li>
+                  <li>適用したい項目のプロンプトをコピーする</li>
+                  <li>Figma Makeのプロンプト入力欄に貼り付けて実行する</li>
+                  <li>複数の項目を適用する場合は順番に繰り返す</li>
                 </ol>
               </div>
             )}

@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AnalyzeRequest, ExtractionResult, CategoryExtraction } from '../src/types/index.js';
+import type { AnalyzeRequest, CategoryExtraction, ExtractionResult, StyleGuide, CategoryPrompt } from '../src/types/index.js';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -7,7 +7,42 @@ const client = new Anthropic({
 
 const MODEL = 'claude-opus-4-6';
 
-function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: string, categoryDescription: string): string {
+// Categories that need animation/interaction-focused analysis
+const ANIMATION_CATEGORY_IDS = ['parallax', 'hover-animation', 'transition'];
+
+// Categories used for style guide generation
+const STYLE_GUIDE_CATEGORY_IDS = ['visual-impression', 'colors', 'fonts', 'layout'];
+
+function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: string, isAnimation: boolean): string {
+  if (isAnimation) {
+    return `あなたはWebデザインの専門家です。提供された参考資料（URL、画像）を分析し、「${categoryLabel}（${categoryLabelEn}）」に関するアニメーション・インタラクション要素を抽出してください。
+
+以下のJSON形式で回答してください：
+
+{
+  "summary": "このアニメーション/インタラクションの全体的なまとめ（200文字以内）",
+  "colors": null,
+  "fonts": null,
+  "animations": [
+    {
+      "type": "アニメーション種類（例：parallax-scroll, hover-scale, page-fade等）",
+      "description": "詳細説明（CSSプロパティ、タイミング関数、duration値、使用ライブラリ名、トリガー条件を含める）"
+    }
+  ],
+  "layoutDescription": null,
+  "styleKeywords": ["キーワード1", "キーワード2"],
+  "notes": "使用ライブラリ（GSAP, ScrollMagic, Locomotive Scroll, Swiper等）やCSS技術の特記事項"
+}
+
+注意：
+- CSSプロパティ（transform, opacity, transition, animation）を具体的に抽出してください
+- タイミング関数（ease, ease-in-out, cubic-bezier等）とduration値を記載してください
+- GSAP・ScrollMagic・Locomotive Scroll等のJSライブラリが確認できる場合は名称を記載してください
+- トリガー条件（スクロール位置、ホバー、クリック、ページ読み込み等）を明確にしてください
+- 該当しない項目（colors, fonts, layoutDescription）はnullとしてください
+- コメントに書かれた指示を優先的に考慮してください`;
+  }
+
   return `あなたはWebデザインの専門家です。提供された参考資料（URL、画像）を分析し、「${categoryLabel}（${categoryLabelEn}）」に関するデザイン要素を抽出してください。
 
 以下のJSON形式で回答してください：
@@ -44,16 +79,19 @@ export async function analyzeCategoryReferences(
   if (!hasReferences) {
     return {
       categoryId: category.id,
+      label: category.label,
+      labelEn: category.labelEn,
       summary: '参考資料が登録されていません',
       styleKeywords: [],
     };
   }
 
+  const isAnimation = ANIMATION_CATEGORY_IDS.includes(category.id);
   const messageContent: Anthropic.MessageParam['content'] = [];
 
   messageContent.push({
     type: 'text',
-    text: buildCategoryAnalysisPrompt(category.label, category.labelEn, ''),
+    text: buildCategoryAnalysisPrompt(category.label, category.labelEn, isAnimation),
   });
 
   let referenceIndex = 1;
@@ -119,6 +157,8 @@ export async function analyzeCategoryReferences(
 
   return {
     categoryId: category.id,
+    label: category.label,
+    labelEn: category.labelEn,
     summary: parsed.summary || '',
     colors: parsed.colors || undefined,
     fonts: parsed.fonts || undefined,
@@ -129,61 +169,53 @@ export async function analyzeCategoryReferences(
   };
 }
 
-export async function generateFigmaPrompt(
-  extraction: ExtractionResult,
+export async function generateCategoryPrompt(
+  extraction: CategoryExtraction,
   additionalContext?: string
-): Promise<string> {
-  const categorySummaries = extraction.categories
-    .map(cat => {
-      const parts: string[] = [`【${cat.categoryId}】`, cat.summary];
+): Promise<CategoryPrompt> {
+  const isAnimation = ANIMATION_CATEGORY_IDS.includes(extraction.categoryId);
 
-      if (cat.colors && cat.colors.length > 0) {
-        parts.push(`カラー: ${cat.colors.map(c => `${c.name}(${c.hex})`).join(', ')}`);
-      }
-      if (cat.fonts && cat.fonts.length > 0) {
-        parts.push(`フォント: ${cat.fonts.map(f => `${f.family}(${f.usage})`).join(', ')}`);
-      }
-      if (cat.animations && cat.animations.length > 0) {
-        parts.push(`アニメーション: ${cat.animations.map(a => a.description).join('; ')}`);
-      }
-      if (cat.layoutDescription) {
-        parts.push(`レイアウト: ${cat.layoutDescription}`);
-      }
-      if (cat.styleKeywords && cat.styleKeywords.length > 0) {
-        parts.push(`スタイルキーワード: ${cat.styleKeywords.join(', ')}`);
-      }
+  const parts: string[] = [extraction.summary];
+  if (extraction.colors && extraction.colors.length > 0) {
+    parts.push(`Colors: ${extraction.colors.map(c => `${c.name}(${c.hex})`).join(', ')}`);
+  }
+  if (extraction.fonts && extraction.fonts.length > 0) {
+    parts.push(`Fonts: ${extraction.fonts.map(f => `${f.family}${f.weight ? ` w${f.weight}` : ''} - ${f.usage}`).join(', ')}`);
+  }
+  if (extraction.animations && extraction.animations.length > 0) {
+    parts.push(`Animations: ${extraction.animations.map(a => `${a.type}: ${a.description}`).join('; ')}`);
+  }
+  if (extraction.layoutDescription) {
+    parts.push(`Layout: ${extraction.layoutDescription}`);
+  }
+  if (extraction.styleKeywords && extraction.styleKeywords.length > 0) {
+    parts.push(`Keywords: ${extraction.styleKeywords.join(', ')}`);
+  }
+  if (extraction.notes) {
+    parts.push(`Notes: ${extraction.notes}`);
+  }
 
-      return parts.join('\n');
-    })
-    .join('\n\n');
+  const animationNote = isAnimation
+    ? '\n- Include specific CSS properties, timing values, and JS library names (GSAP, ScrollMagic, etc.) where applicable'
+    : '';
 
-  const systemPrompt = `あなたはFigma Makeの専門家であり、優れたWebデザインプロンプトライターです。
-デザイン要素の分析結果から、Figma Makeで高品質なWebサイトデザインを生成するための詳細なプロンプトを作成してください。
+  const userMessage = `以下の「${extraction.label}（${extraction.labelEn}）」の分析結果から、Figma Makeで使用するための専用プロンプトを英語で生成してください。
 
-プロンプトは英語で記述し、以下の要素を含めてください：
-1. Overall visual style and mood
-2. Color palette (with hex codes)
-3. Typography (font families, sizes, weights for headings and body)
-4. Layout structure and grid system
-5. UI components styling (buttons, navigation, cards, etc.)
-6. Animations and interactions (parallax, hover effects, transitions)
-7. Image and media treatment
-8. Special design elements and motifs`;
+このプロンプトは「${extraction.label}」の要素のみに集中し、他のデザイン要素（指定外の色・フォント・レイアウト等）は変更しないことを明示してください。
 
-  const userMessage = `以下のデザイン要素の分析結果から、Figma Makeで使用するための詳細なプロンプトを生成してください。
-
-全体的なスタイル: ${extraction.overallStyle}
-
-${additionalContext ? `追加コンテキスト: ${additionalContext}\n\n` : ''}カテゴリ別の分析結果:
-${categorySummaries}
-
-プロンプトは具体的で詳細なものにし、デザイナーがFigma Makeに入力した際に、個性的で高品質なWebサイトデザインが生成されるようにしてください。
-プロンプトは英語で、単一の連続したテキストとして出力してください。`;
+分析結果:
+${parts.join('\n')}
+${additionalContext ? `\n追加コンテキスト: ${additionalContext}` : ''}
+生成するプロンプトの条件:
+- 英語で記述すること
+- 「${extraction.label}」に特化した仕様のみを含めること
+- "without changing other design elements" などの限定表現を入れること${animationNote}
+- 2〜5文程度の簡潔なテキストとして出力すること
+- プロンプト本文のみ出力し、説明や前置きは不要`;
 
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 3000,
-    system: systemPrompt,
+    max_tokens: 800,
     messages: [{ role: 'user', content: userMessage }],
   });
 
@@ -194,7 +226,102 @@ ${categorySummaries}
     throw new Error('No text response from Claude');
   }
 
-  return textContent.text;
+  return {
+    categoryId: extraction.categoryId,
+    label: extraction.label,
+    prompt: textContent.text.trim(),
+  };
+}
+
+export async function generateAllCategoryPrompts(
+  extraction: ExtractionResult,
+  additionalContext?: string
+): Promise<CategoryPrompt[]> {
+  const filledCategories = extraction.categories.filter(
+    cat => cat.summary && cat.summary !== '参考資料が登録されていません'
+  );
+
+  const results: CategoryPrompt[] = [];
+  for (let i = 0; i < filledCategories.length; i += 3) {
+    const batch = filledCategories.slice(i, i + 3);
+    const batchResults = await Promise.all(
+      batch.map(cat => generateCategoryPrompt(cat, additionalContext))
+    );
+    results.push(...batchResults);
+  }
+  return results;
+}
+
+export async function generateStyleGuide(categories: CategoryExtraction[]): Promise<StyleGuide | null> {
+  const relevantCategories = categories.filter(
+    cat =>
+      STYLE_GUIDE_CATEGORY_IDS.includes(cat.categoryId) &&
+      cat.summary &&
+      cat.summary !== '参考資料が登録されていません'
+  );
+
+  if (relevantCategories.length === 0) return null;
+
+  const categorySummaries = relevantCategories.map(cat => {
+    const parts: string[] = [`【${cat.label}】`, cat.summary];
+    if (cat.colors && cat.colors.length > 0) {
+      parts.push(`カラー: ${cat.colors.map(c => `${c.name}(${c.hex})`).join(', ')}`);
+    }
+    if (cat.fonts && cat.fonts.length > 0) {
+      parts.push(`フォント: ${cat.fonts.map(f => `${f.family}${f.weight ? ` w${f.weight}` : ''} - ${f.usage}`).join(', ')}`);
+    }
+    if (cat.layoutDescription) {
+      parts.push(`レイアウト: ${cat.layoutDescription}`);
+    }
+    if (cat.styleKeywords && cat.styleKeywords.length > 0) {
+      parts.push(`キーワード: ${cat.styleKeywords.join(', ')}`);
+    }
+    return parts.join('\n');
+  }).join('\n\n');
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 1500,
+    messages: [{
+      role: 'user',
+      content: `以下のデザイン要素の分析結果をもとに、スタイルガイドを生成してください。
+
+${categorySummaries}
+
+以下のJSON形式で回答してください：
+
+{
+  "concept": "デザインコンセプト（100文字以内）",
+  "colorPalette": [
+    {"hex": "#XXXXXX", "name": "色名", "role": "プライマリ/セカンダリ/アクセント/ニュートラル"}
+  ],
+  "typography": "タイポグラフィの方針と使用フォントの説明（200文字以内）",
+  "layoutPrinciples": "レイアウトの基本方針・グリッドシステムの説明（200文字以内）",
+  "designMood": "デザインのムード・トーン・雰囲気（100文字以内）"
+}
+
+注意：colorPaletteは参考資料から抽出した色のみを含め、不明な場合は空配列にしてください。`,
+    }],
+  });
+
+  const textContent = response.content.find(b => b.type === 'text');
+  if (!textContent || textContent.type !== 'text') return null;
+
+  const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      concept: parsed.concept || '',
+      colorPalette: parsed.colorPalette || [],
+      typography: parsed.typography || '',
+      layoutPrinciples: parsed.layoutPrinciples || '',
+      designMood: parsed.designMood || '',
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function analyzeOverallStyle(categories: AnalyzeRequest['categories']): Promise<string> {

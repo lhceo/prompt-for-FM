@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ExtractionResult, CategoryExtraction } from '../types';
+import type { ExtractionResult, CategoryExtraction, StyleGuide } from '../types';
 
 interface ExtractedElementsProps {
   result: ExtractionResult;
@@ -17,6 +17,85 @@ function ColorSwatch({ hex, name, usage }: { hex: string; name: string; usage: s
       <div className="min-w-0">
         <div className="text-xs font-medium text-gray-700 truncate">{name}</div>
         <div className="text-xs text-gray-400 truncate">{hex} · {usage}</div>
+      </div>
+    </div>
+  );
+}
+
+function StyleGuideSection({ guide }: { guide: StyleGuide }) {
+  const roleColors: Record<string, string> = {
+    プライマリ: 'bg-blue-100 text-blue-700',
+    セカンダリ: 'bg-cyan-100 text-cyan-700',
+    アクセント: 'bg-amber-100 text-amber-700',
+    ニュートラル: 'bg-gray-100 text-gray-600',
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-violet-200 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-violet-50 to-purple-50 px-5 py-3 border-b border-violet-100 flex items-center gap-2">
+        <span className="text-xs bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded font-medium">SG</span>
+        <h3 className="font-semibold text-gray-900 text-sm">スタイルガイド</h3>
+        <span className="text-xs text-gray-400 ml-auto">見た目の印象・色・フォント・レイアウトから生成</span>
+      </div>
+
+      <div className="p-5 space-y-5">
+        {/* Concept & Mood */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {guide.concept && (
+            <div>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">デザインコンセプト</div>
+              <p className="text-sm text-gray-700 leading-relaxed">{guide.concept}</p>
+            </div>
+          )}
+          {guide.designMood && (
+            <div>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">ムード・トーン</div>
+              <p className="text-sm text-gray-700 leading-relaxed">{guide.designMood}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Color Palette */}
+        {guide.colorPalette && guide.colorPalette.length > 0 && (
+          <div>
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">カラーパレット</div>
+            <div className="flex flex-wrap gap-3">
+              {guide.colorPalette.map((color, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div
+                    className="w-9 h-9 rounded-lg shadow-sm border border-gray-200 flex-shrink-0"
+                    style={{ backgroundColor: color.hex }}
+                    title={color.hex}
+                  />
+                  <div>
+                    <div className="text-xs font-medium text-gray-700">{color.name}</div>
+                    <div className="text-xs text-gray-400">{color.hex}</div>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${roleColors[color.role] || 'bg-gray-100 text-gray-600'}`}>
+                      {color.role}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Typography & Layout */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {guide.typography && (
+            <div>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">タイポグラフィ</div>
+              <p className="text-xs text-gray-600 leading-relaxed">{guide.typography}</p>
+            </div>
+          )}
+          {guide.layoutPrinciples && (
+            <div>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">レイアウト方針</div>
+              <p className="text-xs text-gray-600 leading-relaxed">{guide.layoutPrinciples}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -127,6 +206,11 @@ export default function ExtractedElements({ result, categoryLabels }: ExtractedE
         </div>
       </div>
 
+      {/* Style Guide */}
+      {result.styleGuide && (
+        <StyleGuideSection guide={result.styleGuide} />
+      )}
+
       {/* Category cards */}
       {filledCategories.length > 0 && (
         <div>
@@ -138,7 +222,7 @@ export default function ExtractedElements({ result, categoryLabels }: ExtractedE
               <CategoryCard
                 key={cat.categoryId}
                 extraction={cat}
-                label={categoryLabels[cat.categoryId] || cat.categoryId}
+                label={categoryLabels[cat.categoryId] || cat.label}
               />
             ))}
           </div>

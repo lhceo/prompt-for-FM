@@ -45,6 +45,8 @@ export interface ExtractedAnimation {
 
 export interface CategoryExtraction {
   categoryId: string;
+  label: string;
+  labelEn: string;
   summary: string;
   colors?: ExtractedColor[];
   fonts?: ExtractedFont[];
@@ -54,9 +56,24 @@ export interface CategoryExtraction {
   notes?: string;
 }
 
+export interface StyleGuideColor {
+  hex: string;
+  name: string;
+  role: string;
+}
+
+export interface StyleGuide {
+  concept: string;
+  colorPalette: StyleGuideColor[];
+  typography: string;
+  layoutPrinciples: string;
+  designMood: string;
+}
+
 export interface ExtractionResult {
   categories: CategoryExtraction[];
   overallStyle: string;
+  styleGuide?: StyleGuide;
   generatedAt: string;
 }
 
@@ -76,11 +93,17 @@ export interface AnalyzeRequest {
   }[];
 }
 
+export interface CategoryPrompt {
+  categoryId: string;
+  label: string;
+  prompt: string;
+}
+
 export interface GeneratePromptRequest {
   extraction: ExtractionResult;
   additionalContext?: string;
 }
 
 export interface GeneratePromptResponse {
-  prompt: string;
+  prompts: CategoryPrompt[];
 }
