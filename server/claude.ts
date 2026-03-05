@@ -97,8 +97,6 @@ export async function analyzeCategoryReferences(
   const stream = client.messages.stream({
     model: MODEL,
     max_tokens: 2000,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    thinking: { type: 'adaptive' } as any,
     messages: [{ role: 'user', content: messageContent }],
   });
 
@@ -185,8 +183,6 @@ ${categorySummaries}
   const stream = client.messages.stream({
     model: MODEL,
     max_tokens: 3000,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    thinking: { type: 'adaptive' } as any,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
   });
