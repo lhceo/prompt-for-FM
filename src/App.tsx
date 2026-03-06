@@ -10,6 +10,22 @@ type AppStep = 'references' | 'extraction' | 'prompt';
 // Categories used for style guide generation in Step 2
 const STYLE_GUIDE_CATEGORY_IDS = ['visual-impression', 'colors', 'fonts', 'layout'];
 
+// Category groups for Step 1 display
+const CATEGORY_GROUPS: { label: string | null; ids: string[] }[] = [
+  {
+    label: null,
+    ids: ['visual-impression', 'colors', 'fonts', 'layout', 'photos', 'illustrations', 'icons', 'diagrams'],
+  },
+  {
+    label: 'Webコンテンツ',
+    ids: ['header', 'footer', 'main-visual', 'buttons', 'blog', 'news', 'symbol-motif'],
+  },
+  {
+    label: '演出要素',
+    ids: ['parallax', 'hover-animation', 'transition'],
+  },
+];
+
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -33,6 +49,7 @@ export default function App() {
     removeReference,
     getTotalReferenceCount,
     getFilledCategoryCount,
+    clearAll,
   } = useCategories();
 
   const [step, setStep] = useState<AppStep>('references');
@@ -70,7 +87,13 @@ export default function App() {
                     comment: ref.comment,
                   };
                 } else {
-                  const base64 = ref.file ? await fileToBase64(ref.file) : undefined;
+                  // Use file if available, otherwise extract base64 from stored data URL
+                  let base64: string | undefined;
+                  if (ref.file) {
+                    base64 = await fileToBase64(ref.file);
+                  } else if (ref.imageDataUrl) {
+                    base64 = ref.imageDataUrl.split(',')[1];
+                  }
                   return {
                     type: 'image' as const,
                     imageBase64: base64,
@@ -205,32 +228,66 @@ export default function App() {
               </p>
             </div>
 
-            {/* Progress summary */}
-            {totalRefs > 0 && (
-              <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center gap-3">
-                <svg className="w-5 h-5 text-indigo-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-sm text-indigo-700">
+            {/* Auto-save status bar */}
+            <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center gap-3">
+              <svg className="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              {totalRefs > 0 ? (
+                <p className="text-sm text-indigo-700 flex-1">
                   <span className="font-semibold">{filledCats}カテゴリ</span>に
                   <span className="font-semibold"> {totalRefs}件</span>の参考資料が登録されています
+                  <span className="text-indigo-400 text-xs ml-2">（自動保存済み）</span>
                 </p>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-indigo-400 flex-1">参考資料を登録すると自動で保存されます</p>
+              )}
+              {totalRefs > 0 && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('登録した参考資料をすべてクリアしますか？')) clearAll();
+                  }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors duration-150 flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
+                >
+                  クリア
+                </button>
+              )}
+            </div>
 
-            {/* Category sections */}
-            <div className="space-y-3">
-              {categories.map(cat => (
-                <CategorySection
-                  key={cat.id}
-                  category={cat}
-                  isStyleGuideCategory={STYLE_GUIDE_CATEGORY_IDS.includes(cat.id)}
-                  onAddUrl={() => addUrlReference(cat.id)}
-                  onAddImage={file => addImageReference(cat.id, file)}
-                  onUpdateRef={(refId, updates) => updateReference(cat.id, refId, updates)}
-                  onRemoveRef={refId => removeReference(cat.id, refId)}
-                />
-              ))}
+            {/* Category sections grouped */}
+            <div className="space-y-6">
+              {CATEGORY_GROUPS.map(group => {
+                const groupCats = group.ids
+                  .map(id => categories.find(c => c.id === id))
+                  .filter(Boolean) as typeof categories;
+
+                return (
+                  <div key={group.label ?? 'default'}>
+                    {group.label && (
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="h-px flex-1 bg-gray-200" />
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                          {group.label}
+                        </span>
+                        <div className="h-px flex-1 bg-gray-200" />
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {groupCats.map(cat => (
+                        <CategorySection
+                          key={cat.id}
+                          category={cat}
+                          isStyleGuideCategory={STYLE_GUIDE_CATEGORY_IDS.includes(cat.id)}
+                          onAddUrl={() => addUrlReference(cat.id)}
+                          onAddImage={file => addImageReference(cat.id, file)}
+                          onUpdateRef={(refId, updates) => updateReference(cat.id, refId, updates)}
+                          onRemoveRef={refId => removeReference(cat.id, refId)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Analyze button */}

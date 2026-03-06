@@ -14,6 +14,7 @@ export interface ImageReference {
   previewUrl?: string;
   fileName?: string;
   comment: string;
+  imageDataUrl?: string; // full data URL, for localStorage persistence
 }
 
 export type Reference = UrlReference | ImageReference;

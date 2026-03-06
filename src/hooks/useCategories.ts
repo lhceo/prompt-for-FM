@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { Category, UrlReference, ImageReference } from '../types';
 
 const INITIAL_CATEGORIES: Omit<Category, 'references'>[] = [
@@ -120,10 +120,109 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 11);
 }
 
+// ── localStorage persistence ────────────────────────────────────────────────
+
+const STORAGE_KEY = 'figma-prompt-refs-v1';
+
+interface StoredRef {
+  id: string;
+  type: 'url' | 'image';
+  url?: string;
+  comment: string;
+  imageDataUrl?: string;
+  fileName?: string;
+}
+
+interface StoredCategory {
+  id: string;
+  refs: StoredRef[];
+}
+
+function saveToStorage(categories: Category[]) {
+  try {
+    const data: StoredCategory[] = categories.map(cat => ({
+      id: cat.id,
+      refs: cat.references.map(ref => {
+        if (ref.type === 'url') {
+          return { id: ref.id, type: 'url' as const, url: ref.url, comment: ref.comment };
+        }
+        return {
+          id: ref.id,
+          type: 'image' as const,
+          comment: ref.comment,
+          imageDataUrl: ref.imageDataUrl,
+          fileName: ref.fileName,
+        };
+      }),
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // Storage quota exceeded or unavailable — silently ignore
+  }
+}
+
+function loadFromStorage(bases: Omit<Category, 'references'>[]): Category[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return bases.map(createDefaultCategory);
+
+    const stored: StoredCategory[] = JSON.parse(raw);
+
+    return bases.map(base => {
+      const s = stored.find(x => x.id === base.id);
+      if (!s || s.refs.length === 0) return createDefaultCategory(base);
+
+      const references = s.refs.map(ref => {
+        if (ref.type === 'url') {
+          return {
+            id: ref.id,
+            type: 'url' as const,
+            url: ref.url ?? '',
+            comment: ref.comment,
+          } as UrlReference;
+        }
+        return {
+          id: ref.id,
+          type: 'image' as const,
+          previewUrl: ref.imageDataUrl, // use data URL directly as preview
+          fileName: ref.fileName,
+          comment: ref.comment,
+          imageDataUrl: ref.imageDataUrl,
+        } as ImageReference;
+      });
+
+      return { ...base, references };
+    });
+  } catch {
+    return bases.map(createDefaultCategory);
+  }
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Hook ────────────────────────────────────────────────────────────────────
+
 export function useCategories() {
   const [categories, setCategories] = useState<Category[]>(
-    INITIAL_CATEGORIES.map(createDefaultCategory)
+    () => loadFromStorage(INITIAL_CATEGORIES)
   );
+
+  // Auto-save to localStorage whenever categories change
+  useEffect(() => {
+    saveToStorage(categories);
+  }, [categories]);
+
+  const clearAll = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    setCategories(INITIAL_CATEGORIES.map(createDefaultCategory));
+  }, []);
 
   const addUrlReference = useCallback((categoryId: string) => {
     setCategories(prev =>
@@ -140,8 +239,10 @@ export function useCategories() {
     );
   }, []);
 
-  const addImageReference = useCallback((categoryId: string, file: File) => {
+  const addImageReference = useCallback(async (categoryId: string, file: File) => {
     const previewUrl = URL.createObjectURL(file);
+    const imageDataUrl = await fileToDataUrl(file);
+
     setCategories(prev =>
       prev.map(cat => {
         if (cat.id !== categoryId) return cat;
@@ -152,6 +253,7 @@ export function useCategories() {
           previewUrl,
           fileName: file.name,
           comment: '',
+          imageDataUrl,
         };
         return { ...cat, references: [...cat.references, newRef] };
       })
@@ -181,7 +283,7 @@ export function useCategories() {
       prev.map(cat => {
         if (cat.id !== categoryId) return cat;
         const ref = cat.references.find(r => r.id === refId);
-        if (ref && ref.type === 'image' && ref.previewUrl) {
+        if (ref && ref.type === 'image' && ref.previewUrl?.startsWith('blob:')) {
           URL.revokeObjectURL(ref.previewUrl);
         }
         return {
@@ -208,5 +310,6 @@ export function useCategories() {
     removeReference,
     getTotalReferenceCount,
     getFilledCategoryCount,
+    clearAll,
   };
 }
