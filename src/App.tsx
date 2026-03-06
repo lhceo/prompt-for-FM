@@ -168,9 +168,10 @@ export default function App() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                Figma Make プロンプトジェネレーター
-              </h1>
+              <div className="flex items-baseline gap-2">
+                <h1 className="text-xl font-bold text-gray-900">PromptChef</h1>
+                <span className="text-sm font-normal text-gray-400">for Figma Make</span>
+              </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 参考資料からFigma Make用の高品質プロンプトを生成
               </p>
