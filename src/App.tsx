@@ -126,7 +126,7 @@ export default function App() {
       }
 
       const data = await response.json();
-      setGeneratedPrompts(data.prompts);
+      setGeneratedPrompts(Array.isArray(data.prompts) ? data.prompts : []);
       setStep('prompt');
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'プロンプト生成中にエラーが発生しました');
@@ -314,6 +314,11 @@ export default function App() {
         {/* Step 3: Prompt generation */}
         {step === 'prompt' && (
           <div>
+            {generateError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {generateError}
+              </div>
+            )}
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-gray-900 mb-1">Step 3：Figma Makeプロンプト生成</h2>
