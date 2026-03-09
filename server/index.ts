@@ -82,9 +82,9 @@ app.post('/api/generate-prompt', async (req, res) => {
       return res.status(400).json({ error: 'Invalid request body' });
     }
 
-    const prompts = await generateAllCategoryPrompts(body.extraction, body.additionalContext);
+    const { globalStylePrompt, prompts } = await generateAllCategoryPrompts(body.extraction, body.additionalContext);
 
-    return res.json({ prompts });
+    return res.json({ prompts, globalStylePrompt });
   } catch (error) {
     console.error('Prompt generation error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';

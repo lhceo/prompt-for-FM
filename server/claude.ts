@@ -169,19 +169,77 @@ export async function analyzeCategoryReferences(
   };
 }
 
+export async function generateGlobalStylePrompt(
+  styleGuide: StyleGuide | null | undefined,
+  styleCategories: CategoryExtraction[]
+): Promise<string> {
+  const parts: string[] = [];
+
+  if (styleGuide) {
+    if (styleGuide.concept) parts.push(`Design Concept: ${styleGuide.concept}`);
+    if (styleGuide.designMood) parts.push(`Design Mood: ${styleGuide.designMood}`);
+    if (styleGuide.colorPalette.length > 0) {
+      parts.push(`Color Palette: ${styleGuide.colorPalette.map(c => `${c.name}(${c.hex}) - ${c.role}`).join(', ')}`);
+    }
+    if (styleGuide.typography) parts.push(`Typography: ${styleGuide.typography}`);
+    if (styleGuide.layoutPrinciples) parts.push(`Layout Principles: ${styleGuide.layoutPrinciples}`);
+  }
+
+  // Supplement with raw category details for precision
+  for (const cat of styleCategories) {
+    if (cat.colors && cat.colors.length > 0) {
+      parts.push(`${cat.label} colors: ${cat.colors.map(c => `${c.name}(${c.hex}) - ${c.usage}`).join(', ')}`);
+    }
+    if (cat.fonts && cat.fonts.length > 0) {
+      parts.push(`${cat.label} fonts: ${cat.fonts.map(f => `${f.family}${f.weight ? ` w${f.weight}` : ''} - ${f.usage}`).join(', ')}`);
+    }
+    if (cat.layoutDescription) {
+      parts.push(`${cat.label} layout: ${cat.layoutDescription}`);
+    }
+    if (cat.styleKeywords && cat.styleKeywords.length > 0) {
+      parts.push(`${cat.label} keywords: ${cat.styleKeywords.join(', ')}`);
+    }
+  }
+
+  const userMessage = `以下のデザイン分析結果をもとに、Figma Makeで使用するためのグローバルスタイルプロンプトを英語で生成してください。
+このプロンプトはFigma Makeに最初に適用し、サイト全体の色・フォント・レイアウトの基盤を確立するためのものです。
+後続のすべてのコンポーネントプロンプトはこのスタイルガイドに従います。
+
+分析結果:
+${parts.join('\n')}
+
+生成するプロンプトの条件:
+- 英語で記述すること
+- カラーパレット（具体的な16進数）、フォントファミリー・ウェイト、レイアウト基本方針をすべて含めること
+- これがサイト全体の「スタイルガイド」として機能することを明示すること（例: "Establish the following as the global design system..."）
+- 3〜8文程度の包括的なテキストとして出力すること
+- プロンプト本文のみ出力し、説明や前置きは不要`;
+
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 1000,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+
+  const response = await stream.finalMessage();
+  const textContent = response.content.find(b => b.type === 'text');
+  if (!textContent || textContent.type !== 'text') {
+    throw new Error('No text response from Claude');
+  }
+  return textContent.text.trim();
+}
+
 export async function generateCategoryPrompt(
   extraction: CategoryExtraction,
   additionalContext?: string
 ): Promise<CategoryPrompt> {
   const isAnimation = ANIMATION_CATEGORY_IDS.includes(extraction.categoryId);
 
+  // Tier 2: component/animation prompts — omit specific color/font values,
+  // reference the global style guide instead
   const parts: string[] = [extraction.summary];
-  if (extraction.colors && extraction.colors.length > 0) {
-    parts.push(`Colors: ${extraction.colors.map(c => `${c.name}(${c.hex})`).join(', ')}`);
-  }
-  if (extraction.fonts && extraction.fonts.length > 0) {
-    parts.push(`Fonts: ${extraction.fonts.map(f => `${f.family}${f.weight ? ` w${f.weight}` : ''} - ${f.usage}`).join(', ')}`);
-  }
+  parts.push('Colors & Typography: Follow the established global style guide. Do not define or override any colors or fonts.');
+
   if (extraction.animations && extraction.animations.length > 0) {
     parts.push(`Animations: ${extraction.animations.map(a => `${a.type}: ${a.description}`).join('; ')}`);
   }
@@ -196,19 +254,21 @@ export async function generateCategoryPrompt(
   }
 
   const animationNote = isAnimation
-    ? '\n- Include specific CSS properties, timing values, and JS library names (GSAP, ScrollMagic, etc.) where applicable'
+    ? '\n- Include specific CSS properties, timing values, and JS library names (GSAP, ScrollMagic, etc.) where applicable\n- When animations require colors, explicitly state to use colors from the global style guide'
     : '';
 
   const userMessage = `以下の「${extraction.label}（${extraction.labelEn}）」の分析結果から、Figma Makeで使用するための専用プロンプトを英語で生成してください。
 
-このプロンプトは「${extraction.label}」の要素のみに集中し、他のデザイン要素（指定外の色・フォント・レイアウト等）は変更しないことを明示してください。
+このプロンプトは「${extraction.label}」の構造・配置・インタラクションのみに集中します。
+色とフォントは別途定義されたグローバルスタイルガイドに従うものとし、このプロンプト内で色やフォントを指定しないでください。
 
 分析結果:
 ${parts.join('\n')}
 ${additionalContext ? `\n追加コンテキスト: ${additionalContext}` : ''}
 生成するプロンプトの条件:
 - 英語で記述すること
-- 「${extraction.label}」に特化した仕様のみを含めること
+- 「${extraction.label}」の構造・レイアウト・インタラクションに特化した仕様のみを含めること
+- 色・フォントは "using the established color palette" / "following the global typography" などの参照表現のみ使用すること
 - "without changing other design elements" などの限定表現を入れること${animationNote}
 - 2〜5文程度の簡潔なテキストとして出力すること
 - プロンプト本文のみ出力し、説明や前置きは不要`;
@@ -220,7 +280,6 @@ ${additionalContext ? `\n追加コンテキスト: ${additionalContext}` : ''}
   });
 
   const response = await stream.finalMessage();
-
   const textContent = response.content.find(b => b.type === 'text');
   if (!textContent || textContent.type !== 'text') {
     throw new Error('No text response from Claude');
@@ -236,20 +295,35 @@ ${additionalContext ? `\n追加コンテキスト: ${additionalContext}` : ''}
 export async function generateAllCategoryPrompts(
   extraction: ExtractionResult,
   additionalContext?: string
-): Promise<CategoryPrompt[]> {
-  const filledCategories = extraction.categories.filter(
-    cat => cat.summary && cat.summary !== '参考資料が登録されていません'
+): Promise<{ globalStylePrompt: string | null; prompts: CategoryPrompt[] }> {
+  const styleCategories = extraction.categories.filter(
+    cat => STYLE_GUIDE_CATEGORY_IDS.includes(cat.categoryId) &&
+           cat.summary && cat.summary !== '参考資料が登録されていません'
   );
 
-  const results: CategoryPrompt[] = [];
-  for (let i = 0; i < filledCategories.length; i += 3) {
-    const batch = filledCategories.slice(i, i + 3);
+  // Tier 2: component/animation categories only
+  const componentCategories = extraction.categories.filter(
+    cat => !STYLE_GUIDE_CATEGORY_IDS.includes(cat.categoryId) &&
+           cat.summary && cat.summary !== '参考資料が登録されていません'
+  );
+
+  // Generate Tier 1 and Tier 2 concurrently
+  const hasStyleData = styleCategories.length > 0 || extraction.styleGuide;
+  const globalStylePromptPromise = hasStyleData
+    ? generateGlobalStylePrompt(extraction.styleGuide, styleCategories)
+    : Promise.resolve(null);
+
+  const prompts: CategoryPrompt[] = [];
+  for (let i = 0; i < componentCategories.length; i += 3) {
+    const batch = componentCategories.slice(i, i + 3);
     const batchResults = await Promise.all(
       batch.map(cat => generateCategoryPrompt(cat, additionalContext))
     );
-    results.push(...batchResults);
+    prompts.push(...batchResults);
   }
-  return results;
+
+  const globalStylePrompt = await globalStylePromptPromise;
+  return { globalStylePrompt, prompts };
 }
 
 export async function generateStyleGuide(categories: CategoryExtraction[]): Promise<StyleGuide | null> {

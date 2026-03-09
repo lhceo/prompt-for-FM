@@ -60,6 +60,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [generatedPrompts, setGeneratedPrompts] = useState<CategoryPrompt[]>([]);
+  const [globalStylePrompt, setGlobalStylePrompt] = useState<string | null>(null);
 
   const categoryLabels = Object.fromEntries(
     categories.map(c => [c.id, c.label])
@@ -150,6 +151,7 @@ export default function App() {
 
       const data = await response.json();
       setGeneratedPrompts(Array.isArray(data.prompts) ? data.prompts : []);
+      setGlobalStylePrompt(data.globalStylePrompt ?? null);
       setStep('prompt');
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'プロンプト生成中にエラーが発生しました');
@@ -410,23 +412,10 @@ export default function App() {
 
             <PromptOutput
               prompts={generatedPrompts}
+              globalStylePrompt={globalStylePrompt}
               isGenerating={isGenerating}
               onGenerate={handleGeneratePrompt}
             />
-
-            {generatedPrompts.length > 0 && (
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-                <h4 className="text-sm font-semibold text-blue-800 mb-2">
-                  Figma Makeへの貼り付け方
-                </h4>
-                <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-                  <li>Figma Makeを開く</li>
-                  <li>適用したい項目のプロンプトをコピーする</li>
-                  <li>Figma Makeのプロンプト入力欄に貼り付けて実行する</li>
-                  <li>複数の項目を適用する場合は順番に繰り返す</li>
-                </ol>
-              </div>
-            )}
           </div>
         )}
       </main>

@@ -107,4 +107,5 @@ export interface GeneratePromptRequest {
 
 export interface GeneratePromptResponse {
   prompts: CategoryPrompt[];
+  globalStylePrompt?: string | null;
 }
