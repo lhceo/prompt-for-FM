@@ -48,7 +48,7 @@ const INITIAL_CATEGORIES: Omit<Category, 'references'>[] = [
     id: 'diagrams',
     label: '絵図',
     labelEn: 'Diagrams',
-    description: '図表・インフォグラフィックの参考',
+    description: '図表・インフォグラフィックの参考（グラフ表示アニメーション参考も登録可）',
   },
   {
     id: 'header',

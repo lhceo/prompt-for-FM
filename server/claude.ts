@@ -13,6 +13,9 @@ const ANIMATION_CATEGORY_IDS = ['parallax', 'transition'];
 // Categories that support hover animation references embedded within them
 const HOVER_SUPPORTED_CATEGORY_IDS = ['buttons', 'blog', 'news', 'main-visual', 'header', 'footer'];
 
+// Categories that support entrance/display animation references (scroll-triggered, on-load, etc.)
+const ENTRANCE_ANIMATION_CATEGORY_IDS = ['diagrams'];
+
 // Categories used for style guide generation
 const STYLE_GUIDE_CATEGORY_IDS = ['visual-impression', 'colors', 'fonts', 'layout'];
 
@@ -36,7 +39,7 @@ function buildProjectContextNote(ctx?: ProjectContext): string {
   return `\nProject context:\n${lines.join('\n')}\n`;
 }
 
-function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: string, isAnimation: boolean, isHoverSupported: boolean, projectContext?: ProjectContext): string {
+function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: string, isAnimation: boolean, isHoverSupported: boolean, isEntranceAnimationSupported: boolean, projectContext?: ProjectContext): string {
   const contextBlock = buildProjectContextBlock(projectContext);
   if (isAnimation) {
     return `あなたはWebデザインの専門家です。提供された参考資料（URL、画像）を分析し、「${categoryLabel}（${categoryLabelEn}）」に関するアニメーション・インタラクション要素を抽出してください。${contextBlock}
@@ -100,7 +103,11 @@ function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: str
 - コメントに書かれた指示を優先的に考慮してください${isHoverSupported ? `
 - ホバーアニメーションの参考が含まれている場合は animationsフィールドに抽出してください
   - type は "hover-[対象要素名]" 形式で記載してください（例："hover-button", "hover-card", "hover-nav-link"）
-  - description にはCSSプロパティ・タイミング関数・duration値を具体的に含めてください` : ''}`;
+  - description にはCSSプロパティ・タイミング関数・duration値を具体的に含めてください` : ''}${isEntranceAnimationSupported ? `
+- インフォグラフィック・グラフの表示アニメーション参考が含まれている場合は animationsフィールドに抽出してください
+  - type は "animate-[対象要素名]" 形式で記載してください（例："animate-bar-chart", "animate-counter", "animate-pie", "animate-line-graph"）
+  - description にはCSSプロパティ・タイミング関数・duration値、トリガー条件（スクロール連動・ページ読み込み等）を具体的に含めてください
+  - GSAP・CountUp.js・Chart.js等のライブラリが確認できる場合は名称を記載してください` : ''}`;
 }
 
 export async function analyzeCategoryReferences(
@@ -121,11 +128,12 @@ export async function analyzeCategoryReferences(
 
   const isAnimation = ANIMATION_CATEGORY_IDS.includes(category.id);
   const isHoverSupported = HOVER_SUPPORTED_CATEGORY_IDS.includes(category.id);
+  const isEntranceAnimationSupported = ENTRANCE_ANIMATION_CATEGORY_IDS.includes(category.id);
   const messageContent: Anthropic.MessageParam['content'] = [];
 
   messageContent.push({
     type: 'text',
-    text: buildCategoryAnalysisPrompt(category.label, category.labelEn, isAnimation, isHoverSupported, projectContext),
+    text: buildCategoryAnalysisPrompt(category.label, category.labelEn, isAnimation, isHoverSupported, isEntranceAnimationSupported, projectContext),
   });
 
   let referenceIndex = 1;
@@ -278,6 +286,9 @@ export async function generateCategoryPrompt(
   const isHoverSupported = HOVER_SUPPORTED_CATEGORY_IDS.includes(extraction.categoryId);
   const hasHoverAnimations = isHoverSupported &&
     extraction.animations?.some(a => a.type.startsWith('hover-'));
+  const isEntranceAnimationSupported = ENTRANCE_ANIMATION_CATEGORY_IDS.includes(extraction.categoryId);
+  const hasEntranceAnimations = isEntranceAnimationSupported &&
+    extraction.animations?.some(a => a.type.startsWith('animate-'));
 
   // Tier 2: component/animation prompts — omit specific color/font values,
   // reference the global style guide instead
@@ -301,6 +312,8 @@ export async function generateCategoryPrompt(
     ? '\n- Include specific CSS properties, timing values, and JS library names (GSAP, ScrollMagic, etc.) where applicable\n- When animations require colors, explicitly state to use colors from the global style guide'
     : hasHoverAnimations
     ? '\n- Include hover state interactions with specific CSS properties (transform, opacity, transition, etc.) and timing values\n- Clearly specify which element the hover effect applies to (e.g., button, card thumbnail, nav link)\n- When hover animations require colors, use "from the global style guide" reference expression'
+    : hasEntranceAnimations
+    ? '\n- Include entrance/display animations for infographics and charts with specific CSS properties, timing values, and trigger conditions (scroll-triggered, on-load, etc.)\n- Specify the animated element type (bar chart, counter, pie chart, line graph, etc.) and any JS library (GSAP, CountUp.js, Chart.js, etc.)\n- When animations require colors, use "from the global style guide" reference expression'
     : '';
 
   const contextNote = buildProjectContextNote(projectContext);
