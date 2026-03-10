@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AnalyzeRequest, CategoryExtraction, ExtractionResult, StyleGuide, CategoryPrompt, ProjectContext } from '../src/types/index.js';
+import type { AnalyzeRequest, CategoryExtraction, ExtractionResult, StyleGuide, CategoryPrompt, ProjectContext, ExtractedColor, ExtractColorsRequest } from '../src/types/index.js';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -440,6 +440,74 @@ ${categorySummaries}
     };
   } catch {
     return null;
+  }
+}
+
+export async function extractColorsFromReferences(
+  references: ExtractColorsRequest['references'],
+  projectContext?: ProjectContext
+): Promise<ExtractedColor[]> {
+  const messageContent: Anthropic.MessageParam['content'] = [];
+
+  const contextBlock = buildProjectContextBlock(projectContext);
+  messageContent.push({
+    type: 'text',
+    text: `あなたはWebデザインの専門家です。提供された参考資料から使用されている色を抽出し、役割ごとに分類してください。${contextBlock}
+以下のJSON形式のみで回答してください（他のテキストは不要）：
+
+{
+  "colors": [
+    {"hex": "#XXXXXX", "name": "色名", "role": "base | main | accent", "usage": "使用箇所・用途"}
+  ]
+}
+
+分類ルール：
+- "base"：背景・余白など最も広い面積を占める土台の色（白、薄いグレー、アイボリー等）
+- "main"：ブランドの印象を決定づける主役の色（ロゴ・主要UI・見出し等）
+- "accent"：ユーザーの注目を集めるワンポイントの色（CTAボタン・バッジ・リンク等）
+
+注意：
+- 参考資料から実際に観察できる色のみ抽出してください
+- 色は16進数で正確に記載してください（例：#1A2B3C）
+- 3種類すべてが存在しない場合もあります。観察できたものだけ抽出してください
+- コメントに書かれた指示を優先的に考慮してください`,
+  });
+
+  let idx = 1;
+  for (const ref of references) {
+    messageContent.push({ type: 'text', text: `\n\n--- 参考資料 ${idx} ---` });
+    if (ref.type === 'url' && ref.url) {
+      messageContent.push({
+        type: 'text',
+        text: `URL: ${ref.url}${ref.comment ? `\nコメント: ${ref.comment}` : ''}`,
+      });
+    } else if (ref.type === 'image' && ref.imageBase64) {
+      const mediaType = (ref.imageMimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') || 'image/jpeg';
+      messageContent.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: ref.imageBase64 } });
+      if (ref.comment) messageContent.push({ type: 'text', text: `コメント: ${ref.comment}` });
+    }
+    idx++;
+  }
+
+  messageContent.push({ type: 'text', text: '\n\n上記の参考資料から色を抽出し、JSON形式で回答してください。' });
+
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 1000,
+    messages: [{ role: 'user', content: messageContent }],
+  });
+  const response = await stream.finalMessage();
+  const textContent = response.content.find(b => b.type === 'text');
+  if (!textContent || textContent.type !== 'text') return [];
+
+  const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return [];
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return (parsed.colors || []) as ExtractedColor[];
+  } catch {
+    return [];
   }
 }
 

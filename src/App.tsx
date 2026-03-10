@@ -153,6 +153,60 @@ export default function App() {
   const [generatedPrompts, setGeneratedPrompts] = useState<CategoryPrompt[]>([]);
   const [globalStylePrompt, setGlobalStylePrompt] = useState<string | null>(null);
 
+  // Pre-extracted colors from Step 1 color panel (persisted in localStorage)
+  const [preExtractedColors, setPreExtractedColors] = useState<import('./types').ExtractedColor[] | null>(() => {
+    try {
+      const saved = localStorage.getItem('preExtractedColors');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [isExtractingColors, setIsExtractingColors] = useState(false);
+
+  useEffect(() => {
+    if (preExtractedColors) {
+      localStorage.setItem('preExtractedColors', JSON.stringify(preExtractedColors));
+    } else {
+      localStorage.removeItem('preExtractedColors');
+    }
+  }, [preExtractedColors]);
+
+  const handleExtractColors = useCallback(async () => {
+    const colorsCategory = categories.find(c => c.id === 'colors');
+    if (!colorsCategory || colorsCategory.references.length === 0) return;
+    setIsExtractingColors(true);
+    try {
+      const refs = await Promise.all(
+        colorsCategory.references.map(async ref => {
+          if (ref.type === 'url') {
+            return { type: 'url' as const, url: (ref as import('./types').UrlReference).url, comment: ref.comment };
+          } else {
+            const ir = ref as import('./types').ImageReference;
+            let base64: string | undefined;
+            if (ir.file) {
+              base64 = await fileToBase64(ir.file);
+            } else if (ir.imageDataUrl) {
+              base64 = ir.imageDataUrl.split(',')[1];
+            }
+            return { type: 'image' as const, imageBase64: base64, imageMimeType: ir.file?.type, fileName: ir.fileName, comment: ir.comment };
+          }
+        })
+      );
+      const hasContext = projectContext.purpose || projectContext.targetAudience || projectContext.desiredImpression;
+      const response = await fetch('/api/extract-colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ references: refs, ...(hasContext && { projectContext }) }),
+      });
+      if (!response.ok) throw new Error((await response.json()).error || 'failed');
+      const data = await response.json();
+      setPreExtractedColors(data.colors ?? null);
+    } catch (err) {
+      console.error('Color extraction error:', err);
+    } finally {
+      setIsExtractingColors(false);
+    }
+  }, [categories, projectContext]);
+
   const categoryLabels = Object.fromEntries(
     categories.map(c => [c.id, c.label])
   );
@@ -203,6 +257,7 @@ export default function App() {
       const body: AnalyzeRequest = {
         categories: requestCategories,
         ...(hasContext && { projectContext }),
+        ...(preExtractedColors && preExtractedColors.length > 0 && { preExtractedColors }),
       };
 
       const response = await fetch('/api/analyze', {
@@ -379,10 +434,15 @@ export default function App() {
                           key={cat.id}
                           category={cat}
                           isStyleGuideCategory={STYLE_GUIDE_CATEGORY_IDS.includes(cat.id)}
+                          isColorCategory={cat.id === 'colors'}
+                          extractedColors={cat.id === 'colors' ? preExtractedColors : null}
+                          isExtractingColors={cat.id === 'colors' ? isExtractingColors : false}
                           onAddUrl={() => addUrlReference(cat.id)}
                           onAddImage={file => addImageReference(cat.id, file)}
                           onUpdateRef={(refId, updates) => updateReference(cat.id, refId, updates)}
                           onRemoveRef={refId => removeReference(cat.id, refId)}
+                          onExtractColors={cat.id === 'colors' ? handleExtractColors : undefined}
+                          onClearExtractedColors={cat.id === 'colors' ? () => setPreExtractedColors(null) : undefined}
                         />
                       ))}
                     </div>

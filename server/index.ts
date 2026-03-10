@@ -3,8 +3,8 @@ import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { analyzeCategoryReferences, generateAllCategoryPrompts, analyzeOverallStyle, generateStyleGuide } from './claude.js';
-import type { AnalyzeRequest, ExtractionResult, GeneratePromptRequest } from '../src/types/index.js';
+import { analyzeCategoryReferences, generateAllCategoryPrompts, analyzeOverallStyle, generateStyleGuide, extractColorsFromReferences } from './claude.js';
+import type { AnalyzeRequest, ExtractionResult, GeneratePromptRequest, ExtractColorsRequest } from '../src/types/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -44,15 +44,34 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     const projectContext = body.projectContext;
+    const preExtractedColors = body.preExtractedColors;
+
+    // If colors were pre-extracted in Step 1, skip AI analysis for the colors category
+    const colorsCategory = filledCategories.find(c => c.id === 'colors');
+    const categoriesToAnalyze = preExtractedColors
+      ? filledCategories.filter(c => c.id !== 'colors')
+      : filledCategories;
 
     // Analyze each category in parallel (max 3 concurrent to avoid rate limits)
     const results = [];
-    for (let i = 0; i < filledCategories.length; i += 3) {
-      const batch = filledCategories.slice(i, i + 3);
+    for (let i = 0; i < categoriesToAnalyze.length; i += 3) {
+      const batch = categoriesToAnalyze.slice(i, i + 3);
       const batchResults = await Promise.all(
         batch.map(cat => analyzeCategoryReferences(cat, projectContext))
       );
       results.push(...batchResults);
+    }
+
+    // Inject pre-extracted colors as the colors category result
+    if (preExtractedColors && colorsCategory) {
+      results.push({
+        categoryId: 'colors',
+        label: colorsCategory.label,
+        labelEn: colorsCategory.labelEn,
+        summary: `${preExtractedColors.length}色を事前抽出済み（ベース・メイン・アクセント分類）`,
+        colors: preExtractedColors,
+        styleKeywords: [],
+      });
     }
 
     const [overallStyle, styleGuide] = await Promise.all([
@@ -73,6 +92,22 @@ app.post('/api/analyze', async (req, res) => {
     console.error('Analysis error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: `分析中にエラーが発生しました: ${message}` });
+  }
+});
+
+// Extract colors from references (Step 1 preview)
+app.post('/api/extract-colors', async (req, res) => {
+  try {
+    const body: ExtractColorsRequest = req.body;
+    if (!body.references || !Array.isArray(body.references) || body.references.length === 0) {
+      return res.status(400).json({ error: '参考資料が登録されていません' });
+    }
+    const colors = await extractColorsFromReferences(body.references, body.projectContext);
+    return res.json({ colors });
+  } catch (error) {
+    console.error('Color extraction error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: `色の抽出中にエラーが発生しました: ${message}` });
   }
 });
 

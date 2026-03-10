@@ -86,6 +86,18 @@ export interface ProjectContext {
   desiredImpression: string; // 与えたい印象
 }
 
+export interface ExtractColorsRequest {
+  references: {
+    type: 'url' | 'image';
+    url?: string;
+    imageBase64?: string;
+    imageMimeType?: string;
+    fileName?: string;
+    comment: string;
+  }[];
+  projectContext?: ProjectContext;
+}
+
 export interface AnalyzeRequest {
   categories: {
     id: string;
@@ -101,6 +113,7 @@ export interface AnalyzeRequest {
     }[];
   }[];
   projectContext?: ProjectContext;
+  preExtractedColors?: ExtractedColor[];
 }
 
 export interface CategoryPrompt {
