@@ -11,9 +11,9 @@ type AppStep = 'references' | 'extraction' | 'prompt';
 const STYLE_GUIDE_CATEGORY_IDS = ['visual-impression', 'colors', 'fonts', 'layout'];
 
 // Category groups for Step 1 display
-const CATEGORY_GROUPS: { label: string | null; ids: string[] }[] = [
+const CATEGORY_GROUPS: { label: string; ids: string[] }[] = [
   {
-    label: null,
+    label: 'デザイン要素',
     ids: ['visual-impression', 'colors', 'fonts', 'layout', 'photos', 'illustrations', 'icons', 'diagrams'],
   },
   {
@@ -310,6 +310,8 @@ export default function App() {
     }
   }, [extraction]);
 
+  const [activeGroupIdx, setActiveGroupIdx] = useState(0);
+
   const totalRefs = getTotalReferenceCount();
   const filledCats = getFilledCategoryCount();
 
@@ -410,45 +412,60 @@ export default function App() {
               )}
             </div>
 
-            {/* Category sections grouped */}
-            <div className="space-y-6">
-              {CATEGORY_GROUPS.map(group => {
+            {/* Group tabs */}
+            <div className="flex border-b border-gray-200 mb-4 gap-1">
+              {CATEGORY_GROUPS.map((group, idx) => {
                 const groupCats = group.ids
                   .map(id => categories.find(c => c.id === id))
                   .filter(Boolean) as typeof categories;
-
+                const filledCount = groupCats.filter(cat =>
+                  cat.references.length > 0 || (cat.id === 'colors' && (colorPalette?.colors.length ?? 0) > 0)
+                ).length;
+                const isActive = activeGroupIdx === idx;
                 return (
-                  <div key={group.label ?? 'default'}>
-                    {group.label && (
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-px flex-1 bg-gray-200" />
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                          {group.label}
-                        </span>
-                        <div className="h-px flex-1 bg-gray-200" />
-                      </div>
-                    )}
-                    <div className="space-y-3">
-                      {groupCats.map(cat => (
-                        <CategorySection
-                          key={cat.id}
-                          category={cat}
-                          isStyleGuideCategory={STYLE_GUIDE_CATEGORY_IDS.includes(cat.id)}
-                          isColorCategory={cat.id === 'colors'}
-                          colorPalette={cat.id === 'colors' ? colorPalette : null}
-                          isExtractingColors={cat.id === 'colors' ? isExtractingColors : false}
-                          onAddUrl={() => addUrlReference(cat.id)}
-                          onAddImage={file => addImageReference(cat.id, file)}
-                          onUpdateRef={(refId, updates) => updateReference(cat.id, refId, updates)}
-                          onRemoveRef={refId => removeReference(cat.id, refId)}
-                          onExtractColors={cat.id === 'colors' ? handleExtractColors : undefined}
-                          onColorPaletteChange={cat.id === 'colors' ? setColorPalette : undefined}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  <button
+                    key={idx}
+                    onClick={() => setActiveGroupIdx(idx)}
+                    className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors duration-150 rounded-t-lg -mb-px border border-b-0 ${
+                      isActive
+                        ? 'bg-white border-gray-200 text-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {group.label}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                      filledCount > 0
+                        ? isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      {filledCount}/{groupCats.length}
+                    </span>
+                  </button>
                 );
               })}
+            </div>
+
+            {/* Active group categories */}
+            <div className="space-y-3">
+              {(CATEGORY_GROUPS[activeGroupIdx].ids
+                .map(id => categories.find(c => c.id === id))
+                .filter(Boolean) as typeof categories
+              ).map(cat => (
+                <CategorySection
+                  key={cat.id}
+                  category={cat}
+                  isStyleGuideCategory={STYLE_GUIDE_CATEGORY_IDS.includes(cat.id)}
+                  isColorCategory={cat.id === 'colors'}
+                  colorPalette={cat.id === 'colors' ? colorPalette : null}
+                  isExtractingColors={cat.id === 'colors' ? isExtractingColors : false}
+                  onAddUrl={() => addUrlReference(cat.id)}
+                  onAddImage={file => addImageReference(cat.id, file)}
+                  onUpdateRef={(refId, updates) => updateReference(cat.id, refId, updates)}
+                  onRemoveRef={refId => removeReference(cat.id, refId)}
+                  onExtractColors={cat.id === 'colors' ? handleExtractColors : undefined}
+                  onColorPaletteChange={cat.id === 'colors' ? setColorPalette : undefined}
+                />
+              ))}
             </div>
 
             {/* Analyze button */}
