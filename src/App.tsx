@@ -371,15 +371,28 @@ export default function App() {
                   {generateError}
                 </div>
               )}
-              <button
-                onClick={() => setStep('prompt')}
-                className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-3.5 rounded-xl font-semibold text-sm hover:from-indigo-700 hover:to-purple-700 transition-all duration-150 shadow-md hover:shadow-lg"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                プロンプト生成へ進む
-              </button>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  onClick={() => setStep('prompt')}
+                  className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-3.5 rounded-xl font-semibold text-sm hover:from-indigo-700 hover:to-purple-700 transition-all duration-150 shadow-md hover:shadow-lg"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                  プロンプト生成へ進む
+                </button>
+                {(generatedPrompts.length > 0 || globalStylePrompt) && (
+                  <button
+                    onClick={() => setStep('prompt')}
+                    className="flex items-center gap-2 bg-white border border-purple-300 text-purple-600 px-6 py-3.5 rounded-xl font-semibold text-sm hover:bg-purple-50 transition-all duration-150 shadow-sm hover:shadow"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    先程のプロンプト結果を表示する
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
