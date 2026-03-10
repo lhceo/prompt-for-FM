@@ -99,12 +99,6 @@ const INITIAL_CATEGORIES: Omit<Category, 'references'>[] = [
     description: 'パララックス・スクロール連動アニメーションの参考（GSAP, ScrollMagic等）',
   },
   {
-    id: 'hover-animation',
-    label: 'ホバーアニメーション',
-    labelEn: 'Hover Animation',
-    description: 'ホバー時のアニメーション・インタラクションの参考',
-  },
-  {
     id: 'transition',
     label: 'トランジション',
     labelEn: 'Transition',
