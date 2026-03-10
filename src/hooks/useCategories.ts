@@ -87,12 +87,6 @@ const INITIAL_CATEGORIES: Omit<Category, 'references'>[] = [
     description: 'ニュース・お知らせセクションの参考（カードのホバーアニメーション参考も登録可）',
   },
   {
-    id: 'symbol-motif',
-    label: 'シンボルモチーフ',
-    labelEn: 'Symbol Motif',
-    description: 'シンボル・グラフィックモチーフの参考',
-  },
-  {
     id: 'parallax',
     label: 'パララックス',
     labelEn: 'Parallax',
