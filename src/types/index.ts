@@ -34,6 +34,17 @@ export interface ExtractedColor {
   usage: string;
 }
 
+export interface ColorRatio {
+  base: number;   // 0-100 percentage
+  main: number;   // 0-100 percentage
+  accent: number; // 0-100 percentage
+}
+
+export interface ColorPaletteData {
+  colors: ExtractedColor[];
+  ratio: ColorRatio;
+}
+
 export interface ExtractedFont {
   family: string;
   weight?: string;
@@ -98,6 +109,11 @@ export interface ExtractColorsRequest {
   projectContext?: ProjectContext;
 }
 
+export interface ExtractColorsResponse {
+  colors: ExtractedColor[];
+  ratio: ColorRatio;
+}
+
 export interface AnalyzeRequest {
   categories: {
     id: string;
@@ -114,6 +130,7 @@ export interface AnalyzeRequest {
   }[];
   projectContext?: ProjectContext;
   preExtractedColors?: ExtractedColor[];
+  colorRatio?: ColorRatio;
 }
 
 export interface CategoryPrompt {

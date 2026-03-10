@@ -3,7 +3,7 @@ import { useCategories } from './hooks/useCategories';
 import CategorySection from './components/CategorySection';
 import ExtractedElements from './components/ExtractedElements';
 import PromptOutput from './components/PromptOutput';
-import type { ExtractionResult, AnalyzeRequest, CategoryPrompt, ProjectContext } from './types';
+import type { ExtractionResult, AnalyzeRequest, CategoryPrompt, ProjectContext, ColorPaletteData } from './types';
 
 type AppStep = 'references' | 'extraction' | 'prompt';
 
@@ -153,22 +153,18 @@ export default function App() {
   const [generatedPrompts, setGeneratedPrompts] = useState<CategoryPrompt[]>([]);
   const [globalStylePrompt, setGlobalStylePrompt] = useState<string | null>(null);
 
-  // Pre-extracted colors from Step 1 color panel (persisted in localStorage)
-  const [preExtractedColors, setPreExtractedColors] = useState<import('./types').ExtractedColor[] | null>(() => {
+  // Color palette (persisted in localStorage)
+  const [colorPalette, setColorPalette] = useState<ColorPaletteData | null>(() => {
     try {
-      const saved = localStorage.getItem('preExtractedColors');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
+      const saved = localStorage.getItem('colorPalette');
+      return saved ? JSON.parse(saved) : { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
+    } catch { return { colors: [], ratio: { base: 70, main: 20, accent: 10 } }; }
   });
   const [isExtractingColors, setIsExtractingColors] = useState(false);
 
   useEffect(() => {
-    if (preExtractedColors) {
-      localStorage.setItem('preExtractedColors', JSON.stringify(preExtractedColors));
-    } else {
-      localStorage.removeItem('preExtractedColors');
-    }
-  }, [preExtractedColors]);
+    localStorage.setItem('colorPalette', JSON.stringify(colorPalette));
+  }, [colorPalette]);
 
   const handleExtractColors = useCallback(async () => {
     const colorsCategory = categories.find(c => c.id === 'colors');
@@ -199,7 +195,10 @@ export default function App() {
       });
       if (!response.ok) throw new Error((await response.json()).error || 'failed');
       const data = await response.json();
-      setPreExtractedColors(data.colors ?? null);
+      setColorPalette({
+        colors: data.colors ?? [],
+        ratio: data.ratio ?? { base: 70, main: 20, accent: 10 },
+      });
     } catch (err) {
       console.error('Color extraction error:', err);
     } finally {
@@ -254,10 +253,11 @@ export default function App() {
       );
 
       const hasContext = projectContext.purpose || projectContext.targetAudience || projectContext.desiredImpression;
+      const hasColors = colorPalette && colorPalette.colors.length > 0;
       const body: AnalyzeRequest = {
         categories: requestCategories,
         ...(hasContext && { projectContext }),
-        ...(preExtractedColors && preExtractedColors.length > 0 && { preExtractedColors }),
+        ...(hasColors && { preExtractedColors: colorPalette!.colors, colorRatio: colorPalette!.ratio }),
       };
 
       const response = await fetch('/api/analyze', {
@@ -435,14 +435,14 @@ export default function App() {
                           category={cat}
                           isStyleGuideCategory={STYLE_GUIDE_CATEGORY_IDS.includes(cat.id)}
                           isColorCategory={cat.id === 'colors'}
-                          extractedColors={cat.id === 'colors' ? preExtractedColors : null}
+                          colorPalette={cat.id === 'colors' ? colorPalette : null}
                           isExtractingColors={cat.id === 'colors' ? isExtractingColors : false}
                           onAddUrl={() => addUrlReference(cat.id)}
                           onAddImage={file => addImageReference(cat.id, file)}
                           onUpdateRef={(refId, updates) => updateReference(cat.id, refId, updates)}
                           onRemoveRef={refId => removeReference(cat.id, refId)}
                           onExtractColors={cat.id === 'colors' ? handleExtractColors : undefined}
-                          onClearExtractedColors={cat.id === 'colors' ? () => setPreExtractedColors(null) : undefined}
+                          onColorPaletteChange={cat.id === 'colors' ? setColorPalette : undefined}
                         />
                       ))}
                     </div>

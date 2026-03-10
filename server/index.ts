@@ -45,6 +45,7 @@ app.post('/api/analyze', async (req, res) => {
 
     const projectContext = body.projectContext;
     const preExtractedColors = body.preExtractedColors;
+    const colorRatio = body.colorRatio;
 
     // If colors were pre-extracted in Step 1, skip AI analysis for the colors category
     const colorsCategory = filledCategories.find(c => c.id === 'colors');
@@ -64,11 +65,14 @@ app.post('/api/analyze', async (req, res) => {
 
     // Inject pre-extracted colors as the colors category result
     if (preExtractedColors && colorsCategory) {
+      const ratioSummary = colorRatio
+        ? `（ベース${colorRatio.base}%・メイン${colorRatio.main}%・アクセント${colorRatio.accent}%）`
+        : '（ベース・メイン・アクセント分類）';
       results.push({
         categoryId: 'colors',
         label: colorsCategory.label,
         labelEn: colorsCategory.labelEn,
-        summary: `${preExtractedColors.length}色を事前抽出済み（ベース・メイン・アクセント分類）`,
+        summary: `${preExtractedColors.length}色を事前抽出済み${ratioSummary}`,
         colors: preExtractedColors,
         styleKeywords: [],
       });
@@ -102,8 +106,8 @@ app.post('/api/extract-colors', async (req, res) => {
     if (!body.references || !Array.isArray(body.references) || body.references.length === 0) {
       return res.status(400).json({ error: '参考資料が登録されていません' });
     }
-    const colors = await extractColorsFromReferences(body.references, body.projectContext);
-    return res.json({ colors });
+    const { colors, ratio } = await extractColorsFromReferences(body.references, body.projectContext);
+    return res.json({ colors, ratio });
   } catch (error) {
     console.error('Color extraction error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';

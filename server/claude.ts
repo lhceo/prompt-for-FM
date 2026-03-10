@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AnalyzeRequest, CategoryExtraction, ExtractionResult, StyleGuide, CategoryPrompt, ProjectContext, ExtractedColor, ExtractColorsRequest } from '../src/types/index.js';
+import type { AnalyzeRequest, CategoryExtraction, ExtractionResult, StyleGuide, CategoryPrompt, ProjectContext, ExtractedColor, ColorRatio, ExtractColorsRequest } from '../src/types/index.js';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -446,7 +446,7 @@ ${categorySummaries}
 export async function extractColorsFromReferences(
   references: ExtractColorsRequest['references'],
   projectContext?: ProjectContext
-): Promise<ExtractedColor[]> {
+): Promise<{ colors: ExtractedColor[]; ratio: ColorRatio }> {
   const messageContent: Anthropic.MessageParam['content'] = [];
 
   const contextBlock = buildProjectContextBlock(projectContext);
@@ -458,13 +458,24 @@ export async function extractColorsFromReferences(
 {
   "colors": [
     {"hex": "#XXXXXX", "name": "色名", "role": "base | main | accent", "usage": "使用箇所・用途"}
-  ]
+  ],
+  "ratio": {
+    "base": 70,
+    "main": 20,
+    "accent": 10
+  }
 }
 
 分類ルール：
 - "base"：背景・余白など最も広い面積を占める土台の色（白、薄いグレー、アイボリー等）
 - "main"：ブランドの印象を決定づける主役の色（ロゴ・主要UI・見出し等）
 - "accent"：ユーザーの注目を集めるワンポイントの色（CTAボタン・バッジ・リンク等）
+
+ratioについて：
+- base + main + accent の合計が必ず100になるように推定してください
+- 参考資料での各ロール色の使用面積・頻度から推定してください
+- 一般的なWebデザインでは base:60〜75%, main:15〜25%, accent:5〜15% 程度
+- 参考資料がない場合や判断できない場合はデフォルト値（base:70, main:20, accent:10）を使用してください
 
 注意：
 - 参考資料から実際に観察できる色のみ抽出してください
@@ -493,21 +504,31 @@ export async function extractColorsFromReferences(
 
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 1000,
+    max_tokens: 1200,
     messages: [{ role: 'user', content: messageContent }],
   });
   const response = await stream.finalMessage();
   const textContent = response.content.find(b => b.type === 'text');
-  if (!textContent || textContent.type !== 'text') return [];
+  if (!textContent || textContent.type !== 'text') return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
 
   const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return [];
+  if (!jsonMatch) return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    return (parsed.colors || []) as ExtractedColor[];
+    const colors = (parsed.colors || []) as ExtractedColor[];
+    const rawRatio = parsed.ratio || {};
+    const base = Number(rawRatio.base) || 70;
+    const main = Number(rawRatio.main) || 20;
+    const accent = Number(rawRatio.accent) || 10;
+    // Normalize so they sum to 100
+    const total = base + main + accent;
+    const ratio: ColorRatio = total > 0
+      ? { base: Math.round(base / total * 100), main: Math.round(main / total * 100), accent: 100 - Math.round(base / total * 100) - Math.round(main / total * 100) }
+      : { base: 70, main: 20, accent: 10 };
+    return { colors, ratio };
   } catch {
-    return [];
+    return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
   }
 }
 
