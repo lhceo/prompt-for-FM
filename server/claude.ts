@@ -8,7 +8,10 @@ const client = new Anthropic({
 const MODEL = 'claude-opus-4-6';
 
 // Categories that need animation/interaction-focused analysis
-const ANIMATION_CATEGORY_IDS = ['parallax', 'hover-animation', 'transition'];
+const ANIMATION_CATEGORY_IDS = ['parallax', 'transition'];
+
+// Categories that support hover animation references embedded within them
+const HOVER_SUPPORTED_CATEGORY_IDS = ['buttons', 'blog', 'news', 'main-visual', 'header', 'footer'];
 
 // Categories used for style guide generation
 const STYLE_GUIDE_CATEGORY_IDS = ['visual-impression', 'colors', 'fonts', 'layout'];
@@ -33,7 +36,7 @@ function buildProjectContextNote(ctx?: ProjectContext): string {
   return `\nProject context:\n${lines.join('\n')}\n`;
 }
 
-function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: string, isAnimation: boolean, projectContext?: ProjectContext): string {
+function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: string, isAnimation: boolean, isHoverSupported: boolean, projectContext?: ProjectContext): string {
   const contextBlock = buildProjectContextBlock(projectContext);
   if (isAnimation) {
     return `あなたはWebデザインの専門家です。提供された参考資料（URL、画像）を分析し、「${categoryLabel}（${categoryLabelEn}）」に関するアニメーション・インタラクション要素を抽出してください。${contextBlock}
@@ -94,7 +97,10 @@ function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: str
 - 必ずしも3色すべてが存在するとは限らない。観察できるものだけ抽出してください
 - 該当しない項目（colors, fonts, animations, layoutDescription）はnullまたは省略可能
 - styleKeywordsは3〜7個のキーワードを含めてください
-- コメントに書かれた指示を優先的に考慮してください`;
+- コメントに書かれた指示を優先的に考慮してください${isHoverSupported ? `
+- ホバーアニメーションの参考が含まれている場合は animationsフィールドに抽出してください
+  - type は "hover-[対象要素名]" 形式で記載してください（例："hover-button", "hover-card", "hover-nav-link"）
+  - description にはCSSプロパティ・タイミング関数・duration値を具体的に含めてください` : ''}`;
 }
 
 export async function analyzeCategoryReferences(
@@ -114,11 +120,12 @@ export async function analyzeCategoryReferences(
   }
 
   const isAnimation = ANIMATION_CATEGORY_IDS.includes(category.id);
+  const isHoverSupported = HOVER_SUPPORTED_CATEGORY_IDS.includes(category.id);
   const messageContent: Anthropic.MessageParam['content'] = [];
 
   messageContent.push({
     type: 'text',
-    text: buildCategoryAnalysisPrompt(category.label, category.labelEn, isAnimation, projectContext),
+    text: buildCategoryAnalysisPrompt(category.label, category.labelEn, isAnimation, isHoverSupported, projectContext),
   });
 
   let referenceIndex = 1;
@@ -268,6 +275,9 @@ export async function generateCategoryPrompt(
   projectContext?: ProjectContext
 ): Promise<CategoryPrompt> {
   const isAnimation = ANIMATION_CATEGORY_IDS.includes(extraction.categoryId);
+  const isHoverSupported = HOVER_SUPPORTED_CATEGORY_IDS.includes(extraction.categoryId);
+  const hasHoverAnimations = isHoverSupported &&
+    extraction.animations?.some(a => a.type.startsWith('hover-'));
 
   // Tier 2: component/animation prompts — omit specific color/font values,
   // reference the global style guide instead
@@ -289,6 +299,8 @@ export async function generateCategoryPrompt(
 
   const animationNote = isAnimation
     ? '\n- Include specific CSS properties, timing values, and JS library names (GSAP, ScrollMagic, etc.) where applicable\n- When animations require colors, explicitly state to use colors from the global style guide'
+    : hasHoverAnimations
+    ? '\n- Include hover state interactions with specific CSS properties (transform, opacity, transition, etc.) and timing values\n- Clearly specify which element the hover effect applies to (e.g., button, card thumbnail, nav link)\n- When hover animations require colors, use "from the global style guide" reference expression'
     : '';
 
   const contextNote = buildProjectContextNote(projectContext);
