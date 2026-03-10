@@ -14,6 +14,24 @@ function detectImageMimeType(base64: string): 'image/jpeg' | 'image/png' | 'imag
   return 'image/jpeg';
 }
 
+function extractJSON(text: string): string | null {
+  // Try code block first (```json ... ``` or ``` ... ```)
+  const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlock) return codeBlock[1].trim();
+  // Find the outermost JSON object by tracking brace depth
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 // Categories that need animation/interaction-focused analysis
 const ANIMATION_CATEGORY_IDS = ['parallax', 'transition'];
 
@@ -197,12 +215,12 @@ export async function analyzeCategoryReferences(
   const rawText = textContent.text;
 
   // Extract JSON from the response
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonStr = extractJSON(rawText);
+  if (!jsonStr) {
     throw new Error('No JSON found in response');
   }
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  const parsed = JSON.parse(jsonStr);
 
   return {
     categoryId: category.id,
@@ -458,11 +476,11 @@ ${categorySummaries}
   const textContent = response.content.find(b => b.type === 'text');
   if (!textContent || textContent.type !== 'text') return null;
 
-  const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return null;
+  const jsonStr = extractJSON(textContent.text);
+  if (!jsonStr) return null;
 
   try {
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonStr);
     return {
       concept: parsed.concept || '',
       colorPalette: parsed.colorPalette || [],
@@ -543,11 +561,11 @@ ratioについて：
   const textContent = response.content.find(b => b.type === 'text');
   if (!textContent || textContent.type !== 'text') return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
 
-  const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
+  const jsonStr = extractJSON(textContent.text);
+  if (!jsonStr) return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
 
   try {
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonStr);
     const colors = (parsed.colors || []) as ExtractedColor[];
     const rawRatio = parsed.ratio || {};
     const base = Number(rawRatio.base) || 70;
