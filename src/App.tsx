@@ -249,15 +249,18 @@ export default function App() {
                 } else {
                   // Use file if available, otherwise extract base64 from stored data URL
                   let base64: string | undefined;
+                  let mimeType: string | undefined;
                   if (ref.file) {
                     base64 = await fileToBase64(ref.file);
+                    mimeType = ref.file.type;
                   } else if (ref.imageDataUrl) {
                     base64 = ref.imageDataUrl.split(',')[1];
+                    mimeType = ref.imageDataUrl.split(';')[0].split(':')[1];
                   }
                   return {
                     type: 'image' as const,
                     imageBase64: base64,
-                    imageMimeType: ref.file?.type,
+                    imageMimeType: mimeType,
                     fileName: ref.fileName,
                     comment: ref.comment,
                   };

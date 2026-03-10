@@ -7,6 +7,13 @@ const client = new Anthropic({
 
 const MODEL = 'claude-opus-4-6';
 
+function detectImageMimeType(base64: string): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
+  if (base64.startsWith('iVBORw0KGgo')) return 'image/png';
+  if (base64.startsWith('R0lGODlh') || base64.startsWith('R0lGODdh')) return 'image/gif';
+  if (base64.startsWith('UklGR')) return 'image/webp';
+  return 'image/jpeg';
+}
+
 // Categories that need animation/interaction-focused analysis
 const ANIMATION_CATEGORY_IDS = ['parallax', 'transition'];
 
@@ -149,7 +156,7 @@ export async function analyzeCategoryReferences(
         text: `URL: ${ref.url}${ref.comment ? `\nコメント: ${ref.comment}` : ''}`,
       });
     } else if (ref.type === 'image' && ref.imageBase64) {
-      const mediaType = (ref.imageMimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') || 'image/jpeg';
+      const mediaType = (ref.imageMimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') || detectImageMimeType(ref.imageBase64);
       messageContent.push({
         type: 'image',
         source: {
@@ -518,7 +525,7 @@ ratioについて：
         text: `URL: ${ref.url}${ref.comment ? `\nコメント: ${ref.comment}` : ''}`,
       });
     } else if (ref.type === 'image' && ref.imageBase64) {
-      const mediaType = (ref.imageMimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') || 'image/jpeg';
+      const mediaType = (ref.imageMimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') || detectImageMimeType(ref.imageBase64);
       messageContent.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: ref.imageBase64 } });
       if (ref.comment) messageContent.push({ type: 'text', text: `コメント: ${ref.comment}` });
     }
