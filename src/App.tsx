@@ -11,17 +11,32 @@ type AppStep = 'references' | 'extraction' | 'prompt';
 const STYLE_GUIDE_CATEGORY_IDS = ['visual-impression', 'colors', 'fonts', 'layout'];
 
 // Category groups for Step 1 display
-const CATEGORY_GROUPS: { label: string; ids: string[] }[] = [
+const CATEGORY_GROUPS: { label: string; ids: string[]; icon: React.ReactNode }[] = [
   {
     label: 'デザイン要素',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+      </svg>
+    ),
     ids: ['visual-impression', 'colors', 'fonts', 'layout', 'photos', 'illustrations', 'icons', 'diagrams'],
   },
   {
     label: 'Webコンテンツ',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+      </svg>
+    ),
     ids: ['header', 'footer', 'main-visual', 'buttons', 'blog', 'news', 'symbol-motif'],
   },
   {
     label: '演出要素',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+      </svg>
+    ),
     ids: ['parallax', 'hover-animation', 'transition'],
   },
 ];
@@ -431,6 +446,7 @@ export default function App() {
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                     }`}
                   >
+                    {group.icon}
                     {group.label}
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
                       filledCount > 0
