@@ -75,7 +75,14 @@ export interface ExtractionResult {
   categories: CategoryExtraction[];
   overallStyle: string;
   styleGuide?: StyleGuide;
+  projectContext?: ProjectContext;
   generatedAt: string;
+}
+
+export interface ProjectContext {
+  purpose: string;        // 目的・解決すべき課題
+  targetAudience: string; // 対象者
+  desiredImpression: string; // 与えたい印象
 }
 
 export interface AnalyzeRequest {
@@ -92,6 +99,7 @@ export interface AnalyzeRequest {
       comment: string;
     }[];
   }[];
+  projectContext?: ProjectContext;
 }
 
 export interface CategoryPrompt {

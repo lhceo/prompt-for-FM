@@ -1,9 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useCategories } from './hooks/useCategories';
 import CategorySection from './components/CategorySection';
 import ExtractedElements from './components/ExtractedElements';
 import PromptOutput from './components/PromptOutput';
-import type { ExtractionResult, AnalyzeRequest, CategoryPrompt } from './types';
+import type { ExtractionResult, AnalyzeRequest, CategoryPrompt, ProjectContext } from './types';
 
 type AppStep = 'references' | 'extraction' | 'prompt';
 
@@ -25,6 +25,84 @@ const CATEGORY_GROUPS: { label: string | null; ids: string[] }[] = [
     ids: ['parallax', 'hover-animation', 'transition'],
   },
 ];
+
+function ProjectContextForm({
+  context,
+  onChange,
+}: {
+  context: ProjectContext;
+  onChange: (ctx: ProjectContext) => void;
+}) {
+  const [open, setOpen] = useState(
+    !!(context.purpose || context.targetAudience || context.desiredImpression)
+  );
+
+  const filled = context.purpose || context.targetAudience || context.desiredImpression;
+
+  return (
+    <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50 overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-violet-100 transition-colors duration-150"
+      >
+        <div className="flex items-center gap-2.5">
+          <svg className="w-4 h-4 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className="text-sm font-semibold text-violet-800">プロジェクト概要</span>
+          <span className="text-xs text-violet-500 font-normal">任意・入力するとAI分析の精度が上がります</span>
+          {filled && !open && (
+            <span className="text-xs bg-violet-200 text-violet-700 px-2 py-0.5 rounded-full font-medium">入力済み</span>
+          )}
+        </div>
+        <svg
+          className={`w-4 h-4 text-violet-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-violet-200 pt-3">
+          <p className="text-xs text-violet-600">
+            目的・対象者・印象を登録することで、AIが参考資料のデザイン選択の「なぜ」を推察しながら分析・プロンプト生成を行います。
+          </p>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">目的・解決すべき課題</label>
+            <input
+              type="text"
+              value={context.purpose}
+              onChange={e => onChange({ ...context, purpose: e.target.value })}
+              placeholder="例：地元工務店への問い合わせのハードルを下げる"
+              className="input-field text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">対象者</label>
+            <input
+              type="text"
+              value={context.targetAudience}
+              onChange={e => onChange({ ...context, targetAudience: e.target.value })}
+              placeholder="例：30〜50代の家族持ち、住宅購入を検討中"
+              className="input-field text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">与えたい印象</label>
+            <input
+              type="text"
+              value={context.desiredImpression}
+              onChange={e => onChange({ ...context, desiredImpression: e.target.value })}
+              placeholder="例：誠実・温かみ・信頼感"
+              className="input-field text-sm"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -56,6 +134,19 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
+
+  const [projectContext, setProjectContext] = useState<ProjectContext>(() => {
+    try {
+      const saved = localStorage.getItem('projectContext');
+      return saved ? JSON.parse(saved) : { purpose: '', targetAudience: '', desiredImpression: '' };
+    } catch {
+      return { purpose: '', targetAudience: '', desiredImpression: '' };
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('projectContext', JSON.stringify(projectContext));
+  }, [projectContext]);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -108,7 +199,11 @@ export default function App() {
           }))
       );
 
-      const body: AnalyzeRequest = { categories: requestCategories };
+      const hasContext = projectContext.purpose || projectContext.targetAudience || projectContext.desiredImpression;
+      const body: AnalyzeRequest = {
+        categories: requestCategories,
+        ...(hasContext && { projectContext }),
+      };
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -230,6 +325,9 @@ export default function App() {
                 のマークの項目はStep 2のスタイルガイド生成に使用されます
               </p>
             </div>
+
+            {/* Project context form */}
+            <ProjectContextForm context={projectContext} onChange={setProjectContext} />
 
             {/* Auto-save status bar */}
             <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center gap-3">

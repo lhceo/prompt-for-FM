@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AnalyzeRequest, CategoryExtraction, ExtractionResult, StyleGuide, CategoryPrompt } from '../src/types/index.js';
+import type { AnalyzeRequest, CategoryExtraction, ExtractionResult, StyleGuide, CategoryPrompt, ProjectContext } from '../src/types/index.js';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -13,9 +13,30 @@ const ANIMATION_CATEGORY_IDS = ['parallax', 'hover-animation', 'transition'];
 // Categories used for style guide generation
 const STYLE_GUIDE_CATEGORY_IDS = ['visual-impression', 'colors', 'fonts', 'layout'];
 
-function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: string, isAnimation: boolean): string {
+function buildProjectContextBlock(ctx?: ProjectContext): string {
+  if (!ctx) return '';
+  const lines: string[] = [];
+  if (ctx.purpose) lines.push(`- 目的・解決すべき課題: ${ctx.purpose}`);
+  if (ctx.targetAudience) lines.push(`- 対象者: ${ctx.targetAudience}`);
+  if (ctx.desiredImpression) lines.push(`- 与えたい印象: ${ctx.desiredImpression}`);
+  if (lines.length === 0) return '';
+  return `\nプロジェクト情報（分析の参考として活用してください）:\n${lines.join('\n')}\n→ 各デザイン選択が「なぜこのプロジェクトに適しているか」という視点も含めて分析してください。\n`;
+}
+
+function buildProjectContextNote(ctx?: ProjectContext): string {
+  if (!ctx) return '';
+  const lines: string[] = [];
+  if (ctx.purpose) lines.push(`Purpose: ${ctx.purpose}`);
+  if (ctx.targetAudience) lines.push(`Target audience: ${ctx.targetAudience}`);
+  if (ctx.desiredImpression) lines.push(`Desired impression: ${ctx.desiredImpression}`);
+  if (lines.length === 0) return '';
+  return `\nProject context:\n${lines.join('\n')}\n`;
+}
+
+function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: string, isAnimation: boolean, projectContext?: ProjectContext): string {
+  const contextBlock = buildProjectContextBlock(projectContext);
   if (isAnimation) {
-    return `あなたはWebデザインの専門家です。提供された参考資料（URL、画像）を分析し、「${categoryLabel}（${categoryLabelEn}）」に関するアニメーション・インタラクション要素を抽出してください。
+    return `あなたはWebデザインの専門家です。提供された参考資料（URL、画像）を分析し、「${categoryLabel}（${categoryLabelEn}）」に関するアニメーション・インタラクション要素を抽出してください。${contextBlock}
 
 以下のJSON形式で回答してください：
 
@@ -43,7 +64,7 @@ function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: str
 - コメントに書かれた指示を優先的に考慮してください`;
   }
 
-  return `あなたはWebデザインの専門家です。提供された参考資料（URL、画像）を分析し、「${categoryLabel}（${categoryLabelEn}）」に関するデザイン要素を抽出してください。
+  return `あなたはWebデザインの専門家です。提供された参考資料（URL、画像）を分析し、「${categoryLabel}（${categoryLabelEn}）」に関するデザイン要素を抽出してください。${contextBlock}
 
 以下のJSON形式で回答してください：
 
@@ -72,7 +93,8 @@ function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: str
 }
 
 export async function analyzeCategoryReferences(
-  category: AnalyzeRequest['categories'][0]
+  category: AnalyzeRequest['categories'][0],
+  projectContext?: ProjectContext
 ): Promise<CategoryExtraction> {
   const hasReferences = category.references.length > 0;
 
@@ -91,7 +113,7 @@ export async function analyzeCategoryReferences(
 
   messageContent.push({
     type: 'text',
-    text: buildCategoryAnalysisPrompt(category.label, category.labelEn, isAnimation),
+    text: buildCategoryAnalysisPrompt(category.label, category.labelEn, isAnimation, projectContext),
   });
 
   let referenceIndex = 1;
@@ -171,7 +193,8 @@ export async function analyzeCategoryReferences(
 
 export async function generateGlobalStylePrompt(
   styleGuide: StyleGuide | null | undefined,
-  styleCategories: CategoryExtraction[]
+  styleCategories: CategoryExtraction[],
+  projectContext?: ProjectContext
 ): Promise<string> {
   const parts: string[] = [];
 
@@ -201,10 +224,15 @@ export async function generateGlobalStylePrompt(
     }
   }
 
+  const contextNote = buildProjectContextNote(projectContext);
+  const contextInstruction = projectContext && (projectContext.purpose || projectContext.targetAudience || projectContext.desiredImpression)
+    ? '- プロジェクトの目的・対象者・印象を踏まえ、なぜその色・フォント・レイアウトがこのプロジェクトに適切かを一文で示すこと\n'
+    : '';
+
   const userMessage = `以下のデザイン分析結果をもとに、Figma Makeで使用するためのグローバルスタイルプロンプトを英語で生成してください。
 このプロンプトはFigma Makeに最初に適用し、サイト全体の色・フォント・レイアウトの基盤を確立するためのものです。
 後続のすべてのコンポーネントプロンプトはこのスタイルガイドに従います。
-
+${contextNote}
 分析結果:
 ${parts.join('\n')}
 
@@ -212,7 +240,7 @@ ${parts.join('\n')}
 - 英語で記述すること
 - カラーパレット（具体的な16進数）、フォントファミリー・ウェイト、レイアウト基本方針をすべて含めること
 - これがサイト全体の「スタイルガイド」として機能することを明示すること（例: "Establish the following as the global design system..."）
-- 3〜8文程度の包括的なテキストとして出力すること
+${contextInstruction}- 3〜8文程度の包括的なテキストとして出力すること
 - プロンプト本文のみ出力し、説明や前置きは不要`;
 
   const stream = client.messages.stream({
@@ -231,7 +259,8 @@ ${parts.join('\n')}
 
 export async function generateCategoryPrompt(
   extraction: CategoryExtraction,
-  additionalContext?: string
+  additionalContext?: string,
+  projectContext?: ProjectContext
 ): Promise<CategoryPrompt> {
   const isAnimation = ANIMATION_CATEGORY_IDS.includes(extraction.categoryId);
 
@@ -257,11 +286,16 @@ export async function generateCategoryPrompt(
     ? '\n- Include specific CSS properties, timing values, and JS library names (GSAP, ScrollMagic, etc.) where applicable\n- When animations require colors, explicitly state to use colors from the global style guide'
     : '';
 
+  const contextNote = buildProjectContextNote(projectContext);
+  const contextInstruction = projectContext && (projectContext.purpose || projectContext.targetAudience || projectContext.desiredImpression)
+    ? '- プロジェクトの目的・対象者・印象を踏まえ、この要素がなぜそのように設計されるべきかを示す一文を添えること\n'
+    : '';
+
   const userMessage = `以下の「${extraction.label}（${extraction.labelEn}）」の分析結果から、Figma Makeで使用するための専用プロンプトを英語で生成してください。
 
 このプロンプトは「${extraction.label}」の構造・配置・インタラクションのみに集中します。
 色とフォントは別途定義されたグローバルスタイルガイドに従うものとし、このプロンプト内で色やフォントを指定しないでください。
-
+${contextNote}
 分析結果:
 ${parts.join('\n')}
 ${additionalContext ? `\n追加コンテキスト: ${additionalContext}` : ''}
@@ -270,7 +304,7 @@ ${additionalContext ? `\n追加コンテキスト: ${additionalContext}` : ''}
 - 「${extraction.label}」の構造・レイアウト・インタラクションに特化した仕様のみを含めること
 - 色・フォントは "using the established color palette" / "following the global typography" などの参照表現のみ使用すること
 - "without changing other design elements" などの限定表現を入れること${animationNote}
-- 2〜5文程度の簡潔なテキストとして出力すること
+${contextInstruction}- 2〜5文程度の簡潔なテキストとして出力すること
 - プロンプト本文のみ出力し、説明や前置きは不要`;
 
   const stream = client.messages.stream({
@@ -296,6 +330,8 @@ export async function generateAllCategoryPrompts(
   extraction: ExtractionResult,
   additionalContext?: string
 ): Promise<{ globalStylePrompt: string | null; prompts: CategoryPrompt[] }> {
+  const projectContext = extraction.projectContext;
+
   const styleCategories = extraction.categories.filter(
     cat => STYLE_GUIDE_CATEGORY_IDS.includes(cat.categoryId) &&
            cat.summary && cat.summary !== '参考資料が登録されていません'
@@ -310,14 +346,14 @@ export async function generateAllCategoryPrompts(
   // Generate Tier 1 and Tier 2 concurrently
   const hasStyleData = styleCategories.length > 0 || extraction.styleGuide;
   const globalStylePromptPromise = hasStyleData
-    ? generateGlobalStylePrompt(extraction.styleGuide, styleCategories)
+    ? generateGlobalStylePrompt(extraction.styleGuide, styleCategories, projectContext)
     : Promise.resolve(null);
 
   const prompts: CategoryPrompt[] = [];
   for (let i = 0; i < componentCategories.length; i += 3) {
     const batch = componentCategories.slice(i, i + 3);
     const batchResults = await Promise.all(
-      batch.map(cat => generateCategoryPrompt(cat, additionalContext))
+      batch.map(cat => generateCategoryPrompt(cat, additionalContext, projectContext))
     );
     prompts.push(...batchResults);
   }
@@ -326,7 +362,7 @@ export async function generateAllCategoryPrompts(
   return { globalStylePrompt, prompts };
 }
 
-export async function generateStyleGuide(categories: CategoryExtraction[]): Promise<StyleGuide | null> {
+export async function generateStyleGuide(categories: CategoryExtraction[], projectContext?: ProjectContext): Promise<StyleGuide | null> {
   const relevantCategories = categories.filter(
     cat =>
       STYLE_GUIDE_CATEGORY_IDS.includes(cat.categoryId) &&
@@ -353,13 +389,15 @@ export async function generateStyleGuide(categories: CategoryExtraction[]): Prom
     return parts.join('\n');
   }).join('\n\n');
 
+  const contextBlock = buildProjectContextBlock(projectContext);
+
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 1500,
     messages: [{
       role: 'user',
       content: `以下のデザイン要素の分析結果をもとに、スタイルガイドを生成してください。
-
+${contextBlock}
 ${categorySummaries}
 
 以下のJSON形式で回答してください：
@@ -398,7 +436,7 @@ ${categorySummaries}
   }
 }
 
-export async function analyzeOverallStyle(categories: AnalyzeRequest['categories']): Promise<string> {
+export async function analyzeOverallStyle(categories: AnalyzeRequest['categories'], projectContext?: ProjectContext): Promise<string> {
   const filledCategories = categories.filter(c => c.references.length > 0);
 
   if (filledCategories.length === 0) {
@@ -407,13 +445,18 @@ export async function analyzeOverallStyle(categories: AnalyzeRequest['categories
 
   const categoryList = filledCategories.map(c => c.label).join('、');
 
+  const contextBlock = buildProjectContextBlock(projectContext);
+  const contextSuffix = projectContext && (projectContext.purpose || projectContext.targetAudience || projectContext.desiredImpression)
+    ? 'プロジェクトの目的・対象者・印象も踏まえた上で説明してください。'
+    : '';
+
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 500,
     messages: [{
       role: 'user',
       content: `次のWebデザインカテゴリについて参考資料が登録されています：${categoryList}。
-これらの要素を総合した場合の全体的なデザインスタイルを50〜100文字で簡潔に日本語で説明してください。
+${contextBlock}これらの要素を総合した場合の全体的なデザインスタイルを50〜100文字で簡潔に日本語で説明してください。${contextSuffix}
 レスポンスは説明文のみとし、余分なテキストは含めないでください。`,
     }],
   });

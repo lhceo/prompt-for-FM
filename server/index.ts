@@ -43,25 +43,28 @@ app.post('/api/analyze', async (req, res) => {
       return res.status(400).json({ error: '参考資料が登録されていません。少なくとも1つのカテゴリに参考資料を追加してください。' });
     }
 
+    const projectContext = body.projectContext;
+
     // Analyze each category in parallel (max 3 concurrent to avoid rate limits)
     const results = [];
     for (let i = 0; i < filledCategories.length; i += 3) {
       const batch = filledCategories.slice(i, i + 3);
       const batchResults = await Promise.all(
-        batch.map(cat => analyzeCategoryReferences(cat))
+        batch.map(cat => analyzeCategoryReferences(cat, projectContext))
       );
       results.push(...batchResults);
     }
 
     const [overallStyle, styleGuide] = await Promise.all([
-      analyzeOverallStyle(filledCategories),
-      generateStyleGuide(results),
+      analyzeOverallStyle(filledCategories, projectContext),
+      generateStyleGuide(results, projectContext),
     ]);
 
     const extraction: ExtractionResult = {
       categories: results,
       overallStyle,
       styleGuide: styleGuide ?? undefined,
+      projectContext,
       generatedAt: new Date().toISOString(),
     };
 
