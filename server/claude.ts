@@ -201,11 +201,15 @@ export async function analyzeCategoryReferences(
 
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 2000,
+    max_tokens: 4096,
     messages: [{ role: 'user', content: messageContent }],
   });
 
   const response = await stream.finalMessage();
+
+  if (response.stop_reason === 'max_tokens') {
+    throw new Error('Response was truncated (max_tokens reached). Try reducing the number of references.');
+  }
 
   const textContent = response.content.find(b => b.type === 'text');
   if (!textContent || textContent.type !== 'text') {
@@ -217,6 +221,7 @@ export async function analyzeCategoryReferences(
   // Extract JSON from the response
   const jsonStr = extractJSON(rawText);
   if (!jsonStr) {
+    console.error('[analyzeCategoryReferences] No JSON found. Raw response:', rawText.slice(0, 500));
     throw new Error('No JSON found in response');
   }
 
@@ -448,7 +453,7 @@ export async function generateStyleGuide(categories: CategoryExtraction[], proje
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 1500,
+    max_tokens: 4096,
     messages: [{
       role: 'user',
       content: `以下のデザイン要素の分析結果をもとに、スタイルガイドを生成してください。
@@ -477,7 +482,10 @@ ${categorySummaries}
   if (!textContent || textContent.type !== 'text') return null;
 
   const jsonStr = extractJSON(textContent.text);
-  if (!jsonStr) return null;
+  if (!jsonStr) {
+    console.error('[generateStyleGuide] No JSON found. Raw response:', textContent.text.slice(0, 500));
+    return null;
+  }
 
   try {
     const parsed = JSON.parse(jsonStr);
@@ -554,7 +562,7 @@ ratioについて：
 
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 1200,
+    max_tokens: 2048,
     messages: [{ role: 'user', content: messageContent }],
   });
   const response = await stream.finalMessage();
@@ -562,7 +570,10 @@ ratioについて：
   if (!textContent || textContent.type !== 'text') return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
 
   const jsonStr = extractJSON(textContent.text);
-  if (!jsonStr) return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
+  if (!jsonStr) {
+    console.error('[extractColorsFromReferences] No JSON found. Raw response:', textContent.text.slice(0, 500));
+    return { colors: [], ratio: { base: 70, main: 20, accent: 10 } };
+  }
 
   try {
     const parsed = JSON.parse(jsonStr);
