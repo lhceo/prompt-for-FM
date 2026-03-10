@@ -321,14 +321,17 @@ export default function App() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-baseline gap-2">
-                <h1 className="text-xl font-bold text-gray-900">PromptChef</h1>
-                <span className="text-sm font-normal text-gray-400">for Figma Make</span>
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="PromptChef" className="h-8 w-auto" />
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <h1 className="text-xl font-bold text-gray-900">PromptChef</h1>
+                  <span className="text-sm font-normal text-gray-400">for Figma Make</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  参考資料からFigma Make用の高品質プロンプトを生成
+                </p>
               </div>
-              <p className="text-xs text-gray-500 mt-0.5">
-                参考資料からFigma Make用の高品質プロンプトを生成
-              </p>
             </div>
 
             {/* Step indicator */}
