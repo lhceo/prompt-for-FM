@@ -5,7 +5,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const MODEL = 'claude-opus-4-6';
+const MODEL = 'claude-opus-4-5';
 
 function detectImageMimeType(base64: string): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
   if (base64.startsWith('iVBORw0KGgo')) return 'image/png';
