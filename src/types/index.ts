@@ -30,6 +30,7 @@ export interface Category {
 export interface ExtractedColor {
   hex: string;
   name: string;
+  role: 'base' | 'main' | 'accent';
   usage: string;
 }
 
@@ -60,7 +61,7 @@ export interface CategoryExtraction {
 export interface StyleGuideColor {
   hex: string;
   name: string;
-  role: string;
+  role: 'base' | 'main' | 'accent';
 }
 
 export interface StyleGuide {

@@ -6,7 +6,18 @@ interface ExtractedElementsProps {
   categoryLabels: Record<string, string>;
 }
 
-function ColorSwatch({ hex, name, usage }: { hex: string; name: string; usage: string }) {
+const COLOR_ROLE_STYLE: Record<string, string> = {
+  base:   'bg-gray-100 text-gray-600',
+  main:   'bg-blue-100 text-blue-700',
+  accent: 'bg-amber-100 text-amber-700',
+};
+const COLOR_ROLE_LABEL: Record<string, string> = {
+  base:   'ベース',
+  main:   'メイン',
+  accent: 'アクセント',
+};
+
+function ColorSwatch({ hex, name, role, usage }: { hex: string; name: string; role?: string; usage: string }) {
   return (
     <div className="flex items-center gap-2 group">
       <div
@@ -15,7 +26,14 @@ function ColorSwatch({ hex, name, usage }: { hex: string; name: string; usage: s
         title={hex}
       />
       <div className="min-w-0">
-        <div className="text-xs font-medium text-gray-700 truncate">{name}</div>
+        <div className="flex items-center gap-1.5">
+          <div className="text-xs font-medium text-gray-700 truncate">{name}</div>
+          {role && (
+            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${COLOR_ROLE_STYLE[role] ?? 'bg-gray-100 text-gray-600'}`}>
+              {COLOR_ROLE_LABEL[role] ?? role}
+            </span>
+          )}
+        </div>
         <div className="text-xs text-gray-400 truncate">{hex} · {usage}</div>
       </div>
     </div>
@@ -23,12 +41,6 @@ function ColorSwatch({ hex, name, usage }: { hex: string; name: string; usage: s
 }
 
 function StyleGuideSection({ guide }: { guide: StyleGuide }) {
-  const roleColors: Record<string, string> = {
-    プライマリ: 'bg-blue-100 text-blue-700',
-    セカンダリ: 'bg-cyan-100 text-cyan-700',
-    アクセント: 'bg-amber-100 text-amber-700',
-    ニュートラル: 'bg-gray-100 text-gray-600',
-  };
 
   return (
     <div className="bg-white rounded-xl border border-violet-200 shadow-sm overflow-hidden">
@@ -71,8 +83,8 @@ function StyleGuideSection({ guide }: { guide: StyleGuide }) {
                   <div>
                     <div className="text-xs font-medium text-gray-700">{color.name}</div>
                     <div className="text-xs text-gray-400">{color.hex}</div>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${roleColors[color.role] || 'bg-gray-100 text-gray-600'}`}>
-                      {color.role}
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${COLOR_ROLE_STYLE[color.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {COLOR_ROLE_LABEL[color.role] ?? color.role}
                     </span>
                   </div>
                 </div>

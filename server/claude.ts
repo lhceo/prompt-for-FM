@@ -71,7 +71,7 @@ function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: str
 {
   "summary": "このカテゴリの全体的なまとめ（200文字以内）",
   "colors": [
-    {"hex": "#XXXXXX", "name": "色名", "usage": "使用箇所・用途"}
+    {"hex": "#XXXXXX", "name": "色名", "role": "base | main | accent", "usage": "使用箇所・用途"}
   ],
   "fonts": [
     {"family": "フォントファミリー名", "weight": "ウェイト（例：400, 700）", "usage": "使用箇所（h1, h2, 本文など）"}
@@ -87,6 +87,11 @@ function buildCategoryAnalysisPrompt(categoryLabel: string, categoryLabelEn: str
 注意：
 - 参考資料から実際に観察できる要素のみを抽出してください
 - 色は16進数で正確に記載してください（例：#1A2B3C）
+- 色のroleは必ず以下3種類のいずれかで分類してください：
+  - "base"：背景・余白など最も広い面積を占める土台の色（白・薄いグレー・アイボリー等）
+  - "main"：ブランドの印象を決定づける主役の色（ロゴ・主要UI・見出し等）
+  - "accent"：注目させたいポイントに使うワンポイントの色（CTAボタン・バッジ等）
+- 必ずしも3色すべてが存在するとは限らない。観察できるものだけ抽出してください
 - 該当しない項目（colors, fonts, animations, layoutDescription）はnullまたは省略可能
 - styleKeywordsは3〜7個のキーワードを含めてください
 - コメントに書かれた指示を優先的に考慮してください`;
@@ -211,7 +216,7 @@ export async function generateGlobalStylePrompt(
   // Supplement with raw category details for precision
   for (const cat of styleCategories) {
     if (cat.colors && cat.colors.length > 0) {
-      parts.push(`${cat.label} colors: ${cat.colors.map(c => `${c.name}(${c.hex}) - ${c.usage}`).join(', ')}`);
+      parts.push(`${cat.label} colors: ${cat.colors.map(c => `[${c.role}] ${c.name}(${c.hex}) - ${c.usage}`).join(', ')}`);
     }
     if (cat.fonts && cat.fonts.length > 0) {
       parts.push(`${cat.label} fonts: ${cat.fonts.map(f => `${f.family}${f.weight ? ` w${f.weight}` : ''} - ${f.usage}`).join(', ')}`);
@@ -405,14 +410,16 @@ ${categorySummaries}
 {
   "concept": "デザインコンセプト（100文字以内）",
   "colorPalette": [
-    {"hex": "#XXXXXX", "name": "色名", "role": "プライマリ/セカンダリ/アクセント/ニュートラル"}
+    {"hex": "#XXXXXX", "name": "色名", "role": "base | main | accent"}
   ],
   "typography": "タイポグラフィの方針と使用フォントの説明（200文字以内）",
   "layoutPrinciples": "レイアウトの基本方針・グリッドシステムの説明（200文字以内）",
   "designMood": "デザインのムード・トーン・雰囲気（100文字以内）"
 }
 
-注意：colorPaletteは参考資料から抽出した色のみを含め、不明な場合は空配列にしてください。`,
+注意：
+- colorPaletteは参考資料から抽出した色のみを含め、不明な場合は空配列にしてください
+- roleは必ず "base"（土台・背景色）/ "main"（主役ブランドカラー）/ "accent"（強調ポイント色）のいずれかで分類してください`,
     }],
   });
 
