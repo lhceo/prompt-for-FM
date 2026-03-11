@@ -17,7 +17,7 @@ function detectImageMimeType(base64: string): 'image/jpeg' | 'image/png' | 'imag
 function extractJSON(text: string): string | null {
   // Try code block first (```json ... ``` or ``` ... ```)
   const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlock) return codeBlock[1].trim();
+  if (codeBlock) return sanitizeJSON(codeBlock[1].trim());
   // Find the outermost JSON object by tracking brace depth
   const start = text.indexOf('{');
   if (start === -1) return null;
@@ -26,10 +26,15 @@ function extractJSON(text: string): string | null {
     if (text[i] === '{') depth++;
     else if (text[i] === '}') {
       depth--;
-      if (depth === 0) return text.slice(start, i + 1);
+      if (depth === 0) return sanitizeJSON(text.slice(start, i + 1));
     }
   }
   return null;
+}
+
+function sanitizeJSON(json: string): string {
+  // Remove trailing commas before } or ]
+  return json.replace(/,\s*([}\]])/g, '$1');
 }
 
 // Categories that need animation/interaction-focused analysis
